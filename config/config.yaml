@@ -1,0 +1,47 @@
+# config.yaml
+server:
+  serverPort: "8080"
+  baseURL: "http://example.com:8080"
+
+providers:
+  github:
+    clientID: ""
+    clientSecret: ""
+    redirectURL: "http://example.com:8080/oidc_auth/plugin/login/callback"
+    endpoint: "http://example.com:8000"
+  casdoor:
+    clientID: ""
+    clientSecret: ""
+    redirectURL: "http://example.com:8080/oidc_auth/plugin/login/callback"
+    endpoint: "http://example.com:8000"
+
+sync_star:
+  enabled: "true"
+  personalToken: ""
+  owner: "zgsm-ai"
+  repo: "zgsm"
+  interval: 1  # minute
+
+database:
+  type: "postgres"  # mysql or postgres
+  host: "example.com"
+  port: 5432
+  username: "postgres"
+  password: "123456"
+  dbname: "auth"
+  maxIdleConns: 100
+  maxOpenConns: 100
+
+encrypt:
+  aes_key: "sUD8XylndVVK7hTNtz3VZMkNrVpinbNg"  # need 32 bit
+  enable_rsa: "false"
+  private_key_path: "config/private.pem"
+  public_key_path: "config/public.pem"
+
+log:
+  level: "info"
+  filename: "logs/app.log"
+  maxSize: 100    # Maximum size 100MB per file
+  maxBackups: 10  # Keep 10 backups
+  maxAge: 30      # Keep for 30 days
+  compress: true  # Compress old logs
