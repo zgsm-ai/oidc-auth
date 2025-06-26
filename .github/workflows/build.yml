@@ -53,13 +53,6 @@ jobs:
             echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           fi
 
-      - name: Release
-        run: |
-          yarn global add semantic-release@17.4.4
-          semantic-release --branches main,master
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
