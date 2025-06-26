@@ -2,32 +2,12 @@ package middleware
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 )
-
-func SetupSession(secret string) gin.HandlerFunc {
-	store := cookie.NewStore([]byte(secret))
-
-	isProduction := os.Getenv("GIN_MODE") == "release"
-	maxAge := getEnvInt("SESSION_MAX_AGE", int((4 * time.Hour).Seconds()))
-
-	store.Options(sessions.Options{
-		Path:     "/",
-		MaxAge:   maxAge,
-		HttpOnly: true,
-		Secure:   isProduction,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	return sessions.Sessions("oidc-session", store)
-}
 
 func SetPlatform(platform string) gin.HandlerFunc {
 	return func(c *gin.Context) {

@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -13,6 +16,7 @@ import (
 	"github.com/zgsm-ai/oidc-auth/internal/handler"
 	"github.com/zgsm-ai/oidc-auth/internal/providers"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
+	"github.com/zgsm-ai/oidc-auth/internal/service"
 	github "github.com/zgsm-ai/oidc-auth/internal/sync"
 	"github.com/zgsm-ai/oidc-auth/pkg/log"
 	"github.com/zgsm-ai/oidc-auth/pkg/utils"
@@ -21,6 +25,8 @@ import (
 var (
 	cfgFile      string
 	globalConfig *config.AppConfig
+	initOnce     sync.Once
+	client       *http.Client
 )
 
 var rootCmd = &cobra.Command{
@@ -66,22 +72,49 @@ func initializeAllConfigurations(cfgFile string) (*config.AppConfig, error) {
 	return cfg, nil
 }
 
+func initHTTPClient(cfg *config.HTTPClientConfig) *http.Client {
+	initOnce.Do(func() {
+		transport := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   cfg.DialTimeout,
+				KeepAlive: cfg.KeepAlive,
+			}).DialContext,
+			TLSHandshakeTimeout: cfg.TLSHandshakeTimeout,
+
+			ResponseHeaderTimeout: cfg.ResponseHeaderTimeout,
+
+			MaxIdleConns:        cfg.MaxIdleConns,
+			MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost,
+			IdleConnTimeout:     cfg.IdleConnTimeout,
+		}
+		client = &http.Client{Transport: transport, Timeout: cfg.Timeout}
+	})
+	return client
+}
+
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the OIDC authentication server",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		var err error
 		globalConfig, err = initializeAllConfigurations(cfgFile)
-		pcfg := make(map[string]*providers.ProviderConfig)
+		if err != nil {
+			log.Fatal(nil, "Failed to initialize config: %v", err)
+		}
+		httpClient := initHTTPClient(globalConfig.Server.HTTP)
+		_ = service.GetSMSCfg(&globalConfig.SMS)
+		providerCfg := make(map[string]*providers.ProviderConfig)
 		for name, p := range globalConfig.Providers {
-			pcfg[name] = &providers.ProviderConfig{
+			providerCfg[name] = &providers.ProviderConfig{
 				ClientID:     p.ClientID,
 				ClientSecret: p.ClientSecret,
 				RedirectURL:  p.RedirectURL,
-				Endpoint:     p.Endpoint,
+				BaseURL:      p.BaseURL,
+				Client:       httpClient,
 			}
 		}
-		providers.InitializeProviders(pcfg)
+		providers.InitializeProviders(providerCfg)
 		if err != nil {
 			log.Fatal(nil, "Failed to initialize config: %v", err)
 		}
@@ -91,6 +124,7 @@ var serveCmd = &cobra.Command{
 		defer cancel()
 
 		syncStar := github.SyncStar(globalConfig.GithubConfig)
+		syncStar.HTTPClient = initHTTPClient(nil)
 		go syncStar.StarSyncTimer(ctx)
 
 		go func() {
@@ -98,6 +132,8 @@ var serveCmd = &cobra.Command{
 			server := handler.Server{
 				ServerPort: globalConfig.Server.ServerPort,
 				BaseURL:    globalConfig.Server.BaseURL,
+				HTTPClient: initHTTPClient(nil),
+				IsPrivate:  globalConfig.Server.IsPrivate,
 			}
 			if err := server.StartServer(); err != nil {
 				log.Error(nil, "Server error: %v", err)

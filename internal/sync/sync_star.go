@@ -20,6 +20,7 @@ type SyncStar struct {
 	Owner         string        `json:"owner" mapstructure:"owner" validate:"required"`
 	Repo          string        `json:"repo" mapstructure:"repo" validate:"required"`
 	Interval      time.Duration `json:"interval" mapstructure:"interval" validate:"required"`
+	HTTPClient    *http.Client
 }
 
 // UserInfo GitHub user information
@@ -55,7 +56,7 @@ func (s *SyncStar) StarCount() (int, error) {
 	req.Header.Set("Accept", "application/vnd.github.star+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
-	client := &http.Client{}
+	client := s.HTTPClient
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -96,6 +97,9 @@ func (s *SyncStar) Stargazers() error {
 	}
 	log.Info(nil, "calculating pages, maxPage: %d", maxPage)
 
+	client := s.HTTPClient
+	processedMap := make(map[string]*repository.StarUser, maxPage*constants.DefaultPageSize)
+
 	var processedData []*repository.StarUser
 	for page := maxPage; page >= 1; page-- {
 		pageURL := fmt.Sprintf("%s?per_page=%d&page=%d", starURL, constants.DefaultPageSize, page)
@@ -108,7 +112,6 @@ func (s *SyncStar) Stargazers() error {
 		req.Header.Set("Accept", "application/vnd.github.star+json")
 		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
-		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
 			log.Error(nil, "failed to get stargazers: %v", err)
@@ -136,31 +139,46 @@ func (s *SyncStar) Stargazers() error {
 				StarredAtDB:   dbTime,
 				StarredAtUnix: starTimeUnixMillis,
 			}
-			processedData = append(processedData, &repository.StarUser{
-				ID:         int64(data.UserID),
-				Name:       data.UserLogin,
-				GitHubID:   strconv.Itoa(data.UserID),
-				GitHubName: data.UserLogin,
-				StarredAt:  data.StarredAtDB.Format(time.DateTime),
-			})
+			//processedData = append(processedData, &repository.StarUser{
+			//	ID:         int64(data.UserID),
+			//	Name:       data.UserLogin,
+			//	GitHubID:   strconv.Itoa(data.UserID),
+			//	GitHubName: data.UserLogin,
+			//	StarredAt:  data.StarredAtDB.Format(time.DateTime),
+			//})
+			processedMap[strconv.Itoa(data.UserID)] =
+				&repository.StarUser{
+					ID:         int64(data.UserID),
+					Name:       data.UserLogin,
+					GitHubID:   strconv.Itoa(data.UserID),
+					GitHubName: data.UserLogin,
+					StarredAt:  data.StarredAtDB.Format(time.DateTime),
+				}
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	users, _ := repository.GetDB().GetAllUsersByConditions(ctx, map[string]any{
+	users, err := repository.GetDB().GetAllUsersByConditions(ctx, map[string]any{
 		"github_id":   "__NOT_NULL__",
 		"github_star": "__NULL__",
 	})
+	if err != nil {
+		log.Error(nil, "Failed to get users who have no star: %v", err)
+		return err
+	}
+
+	for _, p := range processedData {
+		processedMap[p.GitHubID] = p
+	}
+
 	for i, u := range users {
-		for _, p := range processedData {
-			if u.GithubID == p.GitHubID {
-				users[i].GithubStar = "zgsm-ai.zgsm"
-				break
-			}
+		if _, ok := processedMap[u.GithubID]; ok {
+			users[i].GithubStar = "zgsm-ai.zgsm"
 		}
 	}
+
 	err = repository.GetDB().BatchUpsert(ctx, users, constants.DBIndexField)
-	//err = repository.GetDB().BatchUpsert(ctx, processedData, constants.DBIndexField)  // chose to use users instead of processedData
+	//errs = repository.GetDB().BatchUpsert(ctx, processedData, constants.DBIndexField)  // chose to use users instead of processedData
 	if err != nil {
 		log.Error(nil, "Failed to batch upsert stargazers: %v", err)
 		return err
@@ -169,7 +187,7 @@ func (s *SyncStar) Stargazers() error {
 }
 
 // withSyncLock  using this lock in k8s or multiple instances
-func withSyncLock(ctx context.Context, lock *repository.SyncLock, fn func() error) error {
+func (s *SyncStar) withSyncLock(ctx context.Context, lock *repository.SyncLock, fn func() error) error {
 	tmp, err := repository.GetDB().GetByField(ctx, &repository.SyncLock{}, "name", "github_sync_lock")
 
 	if err != nil {
@@ -180,7 +198,7 @@ func withSyncLock(ctx context.Context, lock *repository.SyncLock, fn func() erro
 		lock_, ok := tmp.(*repository.SyncLock)
 		// if not using timestamptz will result in time comparison errs
 		// a lock in an error state that needs to be deleted
-		if ok && lock_.LockedAt.Add(5*time.Minute).Before(time.Now().Local()) {
+		if ok && lock_.LockedAt.Add(2*s.Interval*time.Minute).Before(time.Now().Local()) {
 			log.Error(ctx, "Expired lock detected: Lock name=%s, expired at=%v", lock_.Name, lock_.LockedAt)
 			if err := repository.GetDB().RemoveSyncLock(ctx, lock); err != nil {
 				log.Error(ctx, "Failed to remove expired sync lock: %v", err)
@@ -223,7 +241,7 @@ func (s *SyncStar) StarSyncTimer(ctx context.Context) {
 
 	log.Info(ctx, "Starting initial GitHub star sync...")
 
-	if err := withSyncLock(ctx, &lock, func() error {
+	if err := s.withSyncLock(ctx, &lock, func() error {
 		if err := s.Stargazers(); err != nil {
 			return fmt.Errorf("failed to sync GitHub stars initially: %v", err)
 		}
@@ -242,7 +260,7 @@ func (s *SyncStar) StarSyncTimer(ctx context.Context) {
 			return
 		case <-ticker.C:
 			log.Info(ctx, "Starting periodic GitHub star sync...")
-			if err := withSyncLock(ctx, &lock, func() error {
+			if err := s.withSyncLock(ctx, &lock, func() error {
 				if err := s.Stargazers(); err != nil {
 					return fmt.Errorf("failed to sync GitHub stars: %v", err)
 				}

@@ -2,8 +2,8 @@ package handler
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 	"net/http"
 	"strings"
 	"time"
@@ -25,7 +25,7 @@ func tokenHandler(c *gin.Context) {
 		return
 	}
 	if query.MachineCode != "" && query.VscodeVersion == "" {
-		response.JSONError(c, http.StatusBadRequest, "vscode_version is required")
+		response.JSONError(c, http.StatusBadRequest, errs.ParmaNeedErr("machine_code or vscode_version").Error())
 		return
 	}
 	// if MachineCode is provided, get the token for the first time
@@ -37,10 +37,10 @@ func tokenHandler(c *gin.Context) {
 			return
 		}
 		if tokenPair == nil {
-			response.JSONError(c, http.StatusInternalServerError, "get token failed")
+			response.JSONError(c, http.StatusInternalServerError, errs.ErrGenerateToken.Error())
 			return
 		}
-		response.JSONSuccess(c, gin.H{
+		response.JSONSuccess(c, "", gin.H{
 			"access_token":  tokenPair.AccessToken,
 			"refresh_token": tokenPair.RefreshToken,
 			"state":         c.DefaultQuery("state", ""),
@@ -58,10 +58,10 @@ func tokenHandler(c *gin.Context) {
 		return
 	}
 	if tokenPair == nil {
-		response.JSONError(c, http.StatusInternalServerError, "get token failed")
+		response.JSONError(c, http.StatusInternalServerError, errs.ErrGenerateToken.Error())
 		return
 	}
-	response.JSONSuccess(c, gin.H{
+	response.JSONSuccess(c, "", gin.H{
 		"access_token":  tokenPair.AccessToken,
 		"refresh_token": tokenPair.RefreshToken,
 		"state":         c.DefaultQuery("state", ""),
@@ -70,7 +70,7 @@ func tokenHandler(c *gin.Context) {
 
 func firstGetToken(machineCode, vscodeVersion string) (*utils.TokenPair, int, error) {
 	if vscodeVersion == "" {
-		return nil, http.StatusUnauthorized, errors.New("vs version is required")
+		return nil, http.StatusUnauthorized, errs.ParmaNeedErr("vscode_version")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -81,15 +81,15 @@ func firstGetToken(machineCode, vscodeVersion string) (*utils.TokenPair, int, er
 		"status":         constants.LoginStatusLoggedOut,
 	})
 	if err != nil {
-		return nil, http.StatusUnauthorized, err
+		return nil, http.StatusUnauthorized, errs.ErrQueryUserInfo
 	}
 	if user == nil {
-		return nil, http.StatusUnauthorized, errors.New("user does not exist")
+		return nil, http.StatusUnauthorized, errs.ErrInvalidToken
 	}
 
 	index := findDeviceIndex(user, machineCode, vscodeVersion)
 	if index == -1 {
-		return nil, http.StatusUnauthorized, errors.New("the device does not exist for the current user")
+		return nil, http.StatusUnauthorized, errs.ErrInvalidToken
 	}
 
 	tokenPair, err := generateTokenPair(ctx, user, index)
@@ -117,7 +117,7 @@ func tokenRefresh(refreshToken string) (*utils.TokenPair, int, error) {
 		return nil, http.StatusUnauthorized, err
 	}
 	if user == nil {
-		return nil, http.StatusUnauthorized, errors.New("invalid token")
+		return nil, http.StatusUnauthorized, errs.ErrInvalidToken
 	}
 
 	tokenPair, err := generateTokenPair(ctx, user, index)
@@ -142,7 +142,7 @@ func generateTokenPair(ctx context.Context, user *repository.AuthUser, index int
 
 	tokenPair, err := utils.GenerateTokenPairByUser(user, index)
 	if err != nil || tokenPair == nil {
-		return nil, errors.New("get token failed")
+		return nil, fmt.Errorf("%s, %v", errs.ErrGenerateToken, err)
 	}
 	return tokenPair, nil
 }
@@ -179,17 +179,17 @@ func updateUserInfoMid(user *repository.AuthUser, index int, tokenPair *utils.To
 func getTokenByHash(c *gin.Context) {
 	accessTokenHash, err := getTokenFromHeader(c)
 	if err != nil {
-		response.JSONError(c, http.StatusUnauthorized, "token is required")
+		response.JSONError(c, http.StatusUnauthorized, errs.ParmaNeedErr("token").Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	tokenPair, err := utils.GetTokenByTokenHash(ctx, accessTokenHash)
 	if err != nil {
-		response.JSONError(c, http.StatusUnauthorized, "user does not exist")
+		response.JSONError(c, http.StatusUnauthorized, fmt.Sprintf("%s, %s", errs.ErrQueryUserInfo, err.Error()))
 		return
 	}
-	response.JSONSuccess(c, gin.H{
+	response.JSONSuccess(c, "", gin.H{
 		"state":        c.DefaultQuery("state", ""),
 		"access_token": tokenPair.AccessToken,
 	})
@@ -198,7 +198,7 @@ func getTokenByHash(c *gin.Context) {
 func getTokenFromHeader(c *gin.Context) (string, error) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		return "", fmt.Errorf("authorization is required")
+		return "", errs.ParmaNeedErr("Authorization")
 	}
 
 	parts := strings.SplitN(authHeader, " ", 2)
@@ -206,7 +206,7 @@ func getTokenFromHeader(c *gin.Context) (string, error) {
 		return parts[0], nil
 	}
 	if !(len(parts) == 2 && parts[0] == "Bearer") {
-		return "", fmt.Errorf("bearer is required")
+		return "", errs.ParmaNeedErr("Bearer")
 	}
 
 	tokenString := parts[1]

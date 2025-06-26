@@ -1,24 +1,37 @@
 package response
 
 import (
+	"github.com/zgsm-ai/oidc-auth/pkg/log"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 // JSONSuccess returns successful response
-func JSONSuccess(c *gin.Context, data map[string]any) {
-	data["success"] = true
-	data["message"] = "success"
-	response := gin.H(data)
-	c.JSON(200, response)
+func JSONSuccess(c *gin.Context, message, data any) {
+	response := gin.H{
+		"success":   true,
+		"code":      200,
+		"message":   message,
+		"data":      data,
+		"timestamp": time.Now().Unix(),
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 // JSONError returns error response (basic version)
-func JSONError(c *gin.Context, code int, message string) {
-	c.JSON(code, gin.H{
+func JSONError(c *gin.Context, httpCode int, message string) {
+	c.JSON(httpCode, gin.H{
+		"code":      "",
 		"success":   false,
 		"message":   message,
 		"timestamp": time.Now(),
+		"data":      "",
 	})
+}
+
+func HandleError(c *gin.Context, status int, err error) {
+	log.Error(nil, "operation failed: %v", err)
+	JSONError(c, status, err.Error())
 }

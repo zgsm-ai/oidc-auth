@@ -12,7 +12,6 @@ var (
 func GetManager() *OAuthManager {
 	managerOnce.Do(func() {
 		managerInstance = NewOAuthManager()
-		managerInstance.RegisterFactory("github", NewGithubFactory())
 		managerInstance.RegisterFactory("casdoor", NewCasdoorFactory())
 	})
 	return managerInstance

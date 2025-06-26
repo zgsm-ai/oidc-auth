@@ -1,8 +1,16 @@
 package constants
 
+import "crypto/aes"
+
 // DBIndexField database default constants
 const (
 	DBIndexField = "id"
+)
+
+// AES
+const (
+	BlockSize = aes.BlockSize
+	IV        = "TRYTOCN314402233"
 )
 
 // MaxPageLimit You can find out through the following link
@@ -16,14 +24,16 @@ const (
 
 // login status constants
 const (
-	LoginStatusLoggedIn  = "logged_in"
-	LoginStatusLoggedOut = "logged_out"
+	LoginStatusLoggedIn      = "logged_in"      // out -> in
+	LoginStatusLoggedOut     = "logged_out"     // Initial state
+	LoginStatusLoggedOffline = "logged_offline" // in -> offline
 )
 
 // Binding account related
 const (
-	BindAccountCallbackPath = "/oidc_auth/manager/bind/account/callback"
-	LoginSuccessPath        = "/login/success"
+	LoginSuccessPath       = "/login/success"
+	BindAccountBindURI     = "/credit/manager/"
+	BindAccountCallbackURI = "/oidc-auth/api/v1/manager/bind/account/callback"
 )
 
 // Casdoor certification related
@@ -31,4 +41,5 @@ const (
 	CasdoorAuthURI         = "/login/oauth/authorize"
 	CasdoorTokenURI        = "/api/login/oauth/access_token"
 	CasdoorRefreshTokenURI = "/api/login/oauth/refresh_token"
+	CasdoorMergeURI        = "/api/identity/merge"
 )

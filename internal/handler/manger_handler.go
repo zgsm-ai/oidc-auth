@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 	"net/http"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"github.com/zgsm-ai/oidc-auth/internal/providers"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
-	"github.com/zgsm-ai/oidc-auth/pkg/log"
+	"github.com/zgsm-ai/oidc-auth/internal/service"
 	"github.com/zgsm-ai/oidc-auth/pkg/response"
 	"github.com/zgsm-ai/oidc-auth/pkg/utils"
 )
@@ -32,11 +33,6 @@ func SetServerConfig(config Server) {
 
 func getContextWithTimeout(timeout time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), timeout)
-}
-
-func handleError(c *gin.Context, status int, err error) {
-	log.Error(nil, "operation failed: %v", err)
-	response.JSONError(c, status, err.Error())
 }
 
 func getEncryptedData(data any) (string, error) {
@@ -70,7 +66,7 @@ func getDecryptedData(encryptedData string, result any) error {
 func bindAccount(c *gin.Context) {
 	token, err := getTokenFromHeader(c)
 	if err != nil {
-		handleError(c, http.StatusBadRequest, err)
+		response.HandleError(c, http.StatusBadRequest, err)
 		return
 	}
 
@@ -79,12 +75,12 @@ func bindAccount(c *gin.Context) {
 	provider := c.DefaultQuery("provider", "casdoor")
 	providerInstance, err := oauthManager.GetProvider(provider)
 	if err != nil {
-		handleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, err)
 		return
 	}
 
 	if serverConfig.BaseURL == "" {
-		handleError(c, http.StatusInternalServerError, fmt.Errorf("base URL is not configured"))
+		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("base URL is not configured"))
 		return
 	}
 
@@ -92,11 +88,11 @@ func bindAccount(c *gin.Context) {
 		TokenHash: tokenHash,
 	})
 	if err != nil {
-		handleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	redirectURL := fmt.Sprintf("%s%s", serverConfig.BaseURL, constants.BindAccountCallbackPath)
+	redirectURL := fmt.Sprintf("%s%s", serverConfig.BaseURL, constants.BindAccountCallbackURI)
 	bindType := c.DefaultQuery("bindType", "")
 	var bindParm string
 	if bindType == "github" {
@@ -104,33 +100,34 @@ func bindAccount(c *gin.Context) {
 	} else {
 		bindParm = "&bindType=sms"
 	}
-	URL := providerInstance.GetAuthURL(encryptedData, redirectURL) + bindParm
+	url := providerInstance.GetAuthURL(encryptedData, redirectURL) + bindParm
 
-	response.JSONSuccess(c, map[string]interface{}{
-		"URL": URL,
+	response.JSONSuccess(c, "", map[string]interface{}{
+		"state": c.DefaultQuery("state", ""),
+		"url":   url,
 	})
 }
 
-func bindAccountCallback(c *gin.Context) {
+func (s *Server) bindAccountCallback(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
 	if code == "" {
-		handleError(c, http.StatusBadRequest, fmt.Errorf("code is required"))
+		response.HandleError(c, http.StatusBadRequest, errs.ParmaNeedErr("code"))
 		return
 	}
 	encryptedData := c.DefaultQuery("state", "")
 	if encryptedData == "" {
-		handleError(c, http.StatusBadRequest, fmt.Errorf("state is required"))
+		response.HandleError(c, http.StatusBadRequest, errs.ParmaNeedErr("state"))
 		return
 	}
 	var parameterCarrier ParameterCarrier
 	if err := getDecryptedData(encryptedData, &parameterCarrier); err != nil {
-		handleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, err)
 		return
 	}
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider("casdoor")
 	if err != nil {
-		handleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, err)
 		return
 	}
 	ctx, cancel := getContextWithTimeout(defaultTimeout)
@@ -139,15 +136,22 @@ func bindAccountCallback(c *gin.Context) {
 	parameterCarrier.Provider = "casdoor"
 	userNew, err := GetUserByOauth(ctx, "plugin", code, &parameterCarrier)
 	if err != nil {
-		handleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, err)
 		return
 	}
 	userOld, err := repository.GetDB().GetUserByDeviceConditions(ctx, map[string]any{
 		"access_token_hash": parameterCarrier.TokenHash,
 	})
 	if err != nil || userOld == nil || userNew == nil {
-		handleError(c, http.StatusInternalServerError, fmt.Errorf("user does not exist"))
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrQueryUserInfo)
 		return
+	}
+	var useroldToken string
+	for _, device := range userOld.Devices {
+		if device.AccessTokenHash == parameterCarrier.TokenHash {
+			useroldToken = device.AccessToken
+			break
+		}
 	}
 	// Get a new user and first determine whether it exists in the database
 	var userNewExist *repository.AuthUser
@@ -159,7 +163,16 @@ func bindAccountCallback(c *gin.Context) {
 		userNewExist, err = repository.GetDB().GetUserByField(ctx, "github_id", userNew.GithubID)
 	} else {
 		// custom types are not considered
-		handleError(c, http.StatusInternalServerError, fmt.Errorf("does not support custom account binding"))
+		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("does not support custom account binding"))
+		return
+	}
+	resp, err := service.MergeByCasdoor(providerInstance, useroldToken, userNew.Devices[0].AccessToken, s.HTTPClient)
+	if err != nil {
+		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("account linking failed, %w", err))
+		return
+	}
+	if resp.Status != "ok" {
+		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("failed to merge account"))
 		return
 	}
 	userMarge := userOld
@@ -168,29 +181,33 @@ func bindAccountCallback(c *gin.Context) {
 	} else {
 		// delete one of the accounts
 		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
-			handleError(c, http.StatusInternalServerError, fmt.Errorf("failed to delete old user, %w", err))
+			response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("failed to delete old user, %w", err))
 			return
 		}
 	}
-
 	userMarge.Email = coalesceString(userOld.Email, userNew.Email)
-	userMarge.Name = coalesceString(userOld.Name, userNew.Name)
 	userMarge.Phone = coalesceString(userOld.Phone, userNew.Phone)
 	userMarge.GithubID = coalesceString(userOld.GithubID, userNew.GithubID)
 	userMarge.GithubName = coalesceString(userOld.GithubName, userNew.GithubName)
 	userMarge.UpdatedAt = time.Now()
+	if userMarge.GithubName != "" {
+		userMarge.Name = userMarge.GithubName
+	} else {
+		userMarge.Name = coalesceString(userOld.Name, userNew.Name)
+	}
 
 	if err := repository.GetDB().Upsert(ctx, userMarge, constants.DBIndexField, userMarge.ID); err != nil {
-		handleError(c, http.StatusInternalServerError, fmt.Errorf("failed to update new user: %w", err))
+		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %w", errs.ErrUpdateUserInfo, err))
 		return
 	}
-	c.Redirect(http.StatusFound, providerInstance.GetEndpoint()+constants.LoginSuccessPath)
+	url := providerInstance.GetEndpoint() + constants.BindAccountBindURI + "state=" + parameterCarrier.TokenHash
+	c.Redirect(http.StatusFound, url)
 }
 
-func userInfoHandler(c *gin.Context) {
+func (s *Server) userInfoHandler(c *gin.Context) {
 	token, err := getTokenFromHeader(c)
 	if err != nil {
-		handleError(c, http.StatusBadRequest, err)
+		response.HandleError(c, http.StatusBadRequest, err)
 		return
 	}
 
@@ -202,23 +219,22 @@ func userInfoHandler(c *gin.Context) {
 		"access_token_hash": tokenHash,
 	})
 	if err != nil || user == nil {
-		handleError(c, http.StatusBadRequest, fmt.Errorf("user does not exist"))
+		response.HandleError(c, http.StatusBadRequest, errs.ErrInvalidToken)
 		return
 	}
 
 	data := gin.H{
+		"state":      c.DefaultQuery("state", ""),
 		"username":   user.Name,
 		"uuid":       user.ID.String(),
 		"email":      user.Email,
 		"phone":      user.Phone,
 		"githubID":   user.GithubID,
 		"githubName": user.GithubName,
+		"isPrivate":  s.IsPrivate,
 	}
 
-	response.JSONSuccess(c, gin.H{
-		"state": "success",
-		"data":  data,
-	})
+	response.JSONSuccess(c, "", data)
 }
 
 func coalesceString(values ...string) string {
