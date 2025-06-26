@@ -200,7 +200,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %w", errs.ErrUpdateUserInfo, err))
 		return
 	}
-	url := providerInstance.GetEndpoint() + constants.BindAccountBindURI + "state=" + parameterCarrier.TokenHash
+	url := providerInstance.GetEndpoint() + constants.BindAccountBindURI + "?state=" + parameterCarrier.TokenHash
 	c.Redirect(http.StatusFound, url)
 }
 

@@ -39,6 +39,7 @@ go mod tidy
 3. **配置文件**
 ```bash
 cp config/config.yaml config/config.yaml.local
+# 根据实际情况编辑配置文件
 ```
 
 4. **运行服务**
@@ -117,22 +118,8 @@ docker run -d \
 |                   | `LOG_MAXAGE` | 日志保留天数 | `30` |
 |                   | `LOG_COMPRESS` | 压缩旧日志 | `true` |
 
-### 配置文件
-
-主配置文件 `config/config.yaml` 包含完整的服务配置项，支持热重载和环境变量覆盖。
-
-## 📚 API 接口
-
-### 插件认证接口
-- `GET /oidc_auth/plugin/login` - 用户登录
-- `GET /oidc_auth/plugin/login/callback` - 登录回调
-- `GET /oidc_auth/plugin/login/logout` - 用户退出
-- `GET /oidc_auth/plugin/login/status` - 登录状态
-- `GET /oidc_auth/plugin/login/token` - 获取令牌
 
 ## Kubernetes 部署
-
-使用改进的 Helm Charts 部署到 Kubernetes：
 
 ```bash
 cp ./charts/oidc-auth/values.yaml /your/path/values.yaml

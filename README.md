@@ -13,8 +13,6 @@ A modern OIDC authentication server based on Casdoor, providing enterprise-grade
 - 📱 **SMS Verification** - Integrated SMS service with verification code support
 - 🗄️ **Multi-Database Support** - Compatible with MySQL 8.0+ and PostgreSQL 13+
 - 🐳 **Containerized Deployment** - Complete Docker and Kubernetes support
-- 🔒 **Secure Encryption** - Support for AES and RSA encryption algorithms
-- 📊 **Monitoring & Health Checks** - Built-in health checks and log management
 - ⚡ **High Performance** - Optimized connection pooling and concurrent processing
 - 🛡️ **Security Middleware** - Complete security headers and request logging
 
@@ -121,10 +119,34 @@ Complete environment variable configuration for containerized deployment:
 | | `LOG_MAXAGE` | Log retention days | `30` |
 | | `LOG_COMPRESS` | Compress old logs | `true` |
 
-### Configuration File
+## Kubernetes Deployment
 
-The main configuration file `config/config.yaml` contains complete service configuration items, supporting hot reload and environment variable override.
+```bash
+cp ./charts/oidc-auth/values.yaml /your/path/values.yaml
+# modify /your/path/values.yaml
+helm install -n oidc-auth oidc-auth ./charts/oidc-auth \
+  --set replicaCount=1 \
+  --set autoscaling.enabled=true \
+  --set resources.requests.memory=512Mi \
+  --create-namespace \
+  -f /your/path/values.yaml
+```
 
-## 📚 API Reference
+## License
 
-### Plugin Authentication APIs
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Issues and Pull Requests are welcome!
+
+### Contribution Guidelines
+1. Fork the project
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## Support
+
+If you have any questions or suggestions, please create an [Issue](https://github.com/zgsm-ai/oidc-auth/issues).
