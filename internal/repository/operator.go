@@ -18,6 +18,7 @@ var allowedFields = map[string]map[string]bool{
 		"name":        true,
 		"github_id":   true,
 		"github_name": true,
+		"github_star": true,
 		"email":       true,
 		"provider":    true,
 		"phone":       true,
@@ -27,6 +28,7 @@ var allowedFields = map[string]map[string]bool{
 		"name":        true,
 		"github_id":   true,
 		"github_name": true,
+		"github_star": true,
 	},
 	"SyncLock": {
 		"name": true,
@@ -185,6 +187,9 @@ func (d *Database) GetAllUsersByConditions(ctx context.Context, conditions map[s
 	var users []AuthUser
 	query := d.db.WithContext(ctx)
 	for key, value := range conditions {
+		if err := ValidateFieldName("AuthUser", key); err != nil {
+			return nil, fmt.Errorf("field validation failed: %w", err)
+		}
 		if strValue, ok := value.(string); ok {
 			if strValue == "__NULL__" {
 				query = query.Where(fmt.Sprintf("%s IS NULL OR %s = ''", key, key))

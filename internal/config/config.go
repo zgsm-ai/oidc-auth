@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -14,14 +15,28 @@ type AppConfig struct {
 	Server       Server                    `json:"Server" mapstructure:"Server" validate:"required"`
 	Log          LogConfig                 `json:"log" mapstructure:"log" validate:"required"`
 	Database     DatabaseConfig            `json:"database" mapstructure:"database" validate:"required"`
-	GithubConfig GithubStarConfig          `json:"sync_star" mapstructure:"sync_star" validate:"required"`
+	GithubConfig GithubStarConfig          `json:"syncStar" mapstructure:"syncStar" validate:"required"`
 	Encrypt      EncryptConfig             `json:"encrypt" mapstructure:"encrypt" validate:"required"`
+	SMS          SMSConfig                 `json:"sms" mapstructure:"sms" validate:"required"`
 	Providers    map[string]ProviderConfig `json:"providers" mapstructure:"providers"`
 }
 
 type Server struct {
-	ServerPort string `json:"serverPort" mapstructure:"serverPort" validate:"required,numeric"`
-	BaseURL    string `json:"baseURL" mapstructure:"baseURL"`
+	ServerPort string            `json:"serverPort" mapstructure:"serverPort" validate:"required,numeric"`
+	BaseURL    string            `json:"baseURL" mapstructure:"baseURL"`
+	HTTP       *HTTPClientConfig `json:"http" mapstructure:"http" validate:"required"`
+	IsPrivate  bool              `json:"isPrivate" mapstructure:"isPrivate"`
+}
+
+type HTTPClientConfig struct {
+	Timeout               time.Duration `json:"timeout" mapstructure:"timeout" validate:"gte=0"`
+	DialTimeout           time.Duration `json:"dialTimeout" mapstructure:"dialTimeout" validate:"gte=0"`
+	KeepAlive             time.Duration `json:"keepAlive" mapstructure:"keepAlive" validate:"gte=0"`
+	TLSHandshakeTimeout   time.Duration `json:"tlsHandshakeTimeout" mapstructure:"tlsHandshakeTimeout" validate:"gte=0"`
+	ResponseHeaderTimeout time.Duration `json:"responseHeaderTimeout" mapstructure:"responseHeaderTimeout" validate:"gte=0"`
+	MaxIdleConns          int           `json:"maxIdleConns" mapstructure:"maxIdleConns" validate:"gte=0"`
+	MaxIdleConnsPerHost   int           `json:"maxIdleConnsPerHost" mapstructure:"maxIdleConnsPerHost" validate:"gte=0"`
+	IdleConnTimeout       time.Duration `json:"idleConnTimeout" mapstructure:"idleConnTimeout" validate:"gte=0"`
 }
 
 type LogConfig struct {
@@ -45,26 +60,34 @@ type DatabaseConfig struct {
 }
 
 type GithubStarConfig struct {
-	Enabled       bool
+	Enabled       bool          `json:"enabled" mapstructure:"enabled" validate:"required"`
 	PersonalToken string        `json:"personalToken" mapstructure:"personalToken" validate:"required"`
 	Owner         string        `json:"owner" mapstructure:"owner" validate:"required"`
 	Repo          string        `json:"repo" mapstructure:"repo" validate:"required"`
 	Interval      time.Duration `json:"interval" mapstructure:"interval" validate:"required"`
+	HTTPClient    *http.Client
 }
 
 type EncryptConfig struct {
-	PrivateKeyPath string `json:"private_key_path" mapstructure:"private_key_path" validate:"required"`
-	PublicKeyPath  string `json:"public_key_path" mapstructure:"public_key_path" validate:"required"`
-	AesKey         string `json:"aes_key" mapstructure:"aes_key" validate:"required"`
-	EnableRsa      string `json:"enable_rsa" mapstructure:"enable_rsa"`
+	PrivateKeyPath string `json:"privateKey" mapstructure:"privateKey"`
+	PublicKeyPath  string `json:"publicKey" mapstructure:"publicKey"`
+	AesKey         string `json:"aesKey" mapstructure:"aesKey" validate:"required"`
+	EnableRsa      bool   `json:"enableRsa" mapstructure:"enableRsa"`
+}
+
+type SMSConfig struct {
+	EnabledTest  bool   `json:"enabledTest" mapstructure:"enabledTest" validate:"required"`
+	ClientID     string `json:"clientID" mapstructure:"clientID" validate:"required"`
+	ClientSecret string `json:"clientSecret" mapstructure:"clientSecret" validate:"required"`
+	TokenURL     string `json:"tokenURL" mapstructure:"tokenURL" validate:"required,url"`
+	SendURL      string `json:"sendURL" mapstructure:"sendURL" validate:"required"`
 }
 
 type ProviderConfig struct {
 	ClientID     string `json:"clientID" mapstructure:"clientID"`
 	ClientSecret string `json:"clientSecret" mapstructure:"clientSecret"`
-	RedirectURL  string `json:"redirectURL" mapstructure:"redirectURL"`
 	EncryptKey   string `json:"encryptKey" mapstructure:"encryptKey"`
-	Endpoint     string `json:"endpoint" mapstructure:"endpoint"`
+	BaseURL      string `json:"baseURL" mapstructure:"baseURL"`
 }
 
 const (
@@ -79,8 +102,8 @@ func InitConfig(cfgFile string) (*AppConfig, error) {
 	viper.SetDefault("serverPort", "8080")
 	viper.SetDefault("log.level", "info")
 
-	viper.SetDefault("database.maxIdleConns", 10)
-	viper.SetDefault("database.maxOpenConns", 100)
+	viper.SetDefault("database.maxIdleConns", 50)
+	viper.SetDefault("database.maxOpenConns", 300)
 
 	viper.SetEnvPrefix(EnvPrefix)
 	viper.AutomaticEnv()

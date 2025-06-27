@@ -94,7 +94,6 @@ func newDatabaseImpl(cfg *DBConfig) (*Database, error) {
 
 	if err := db_.AutoMigrate(
 		&AuthUser{},
-		&StarUser{},
 		&SyncLock{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to auto migrate: %v", err)

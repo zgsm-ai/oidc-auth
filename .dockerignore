@@ -32,7 +32,7 @@ coverage.txt
 coverage.html
 
 # Documentation
-README.md
+README.zh-CN.md
 docs/
 *.md
 

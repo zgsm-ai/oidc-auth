@@ -12,7 +12,7 @@ import (
 	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"github.com/zgsm-ai/oidc-auth/internal/providers"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
-	"github.com/zgsm-ai/oidc-auth/pkg/log"
+	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 	"github.com/zgsm-ai/oidc-auth/pkg/response"
 )
 
@@ -28,10 +28,10 @@ type requestQuery struct {
 func (r *requestQuery) validLoginParams(isPlugin bool) error {
 	if isPlugin {
 		if r.VscodeVersion == "" {
-			return fmt.Errorf("vscode_version is required for login")
+			return errs.ParmaNeedErr("vscode_version")
 		}
 		if r.MachineCode == "" {
-			return fmt.Errorf("machine_code is required for login")
+			return errs.ParmaNeedErr("machine_code")
 		}
 	}
 	return nil
@@ -53,7 +53,7 @@ func (s *Server) loginHandler(c *gin.Context) {
 	}
 	provider := c.DefaultQuery("provider", "") // Get the OAuth provider, such as GitHub or Casdoor.
 	if provider == "" {
-		response.JSONError(c, http.StatusBadRequest, "provider is required")
+		response.JSONError(c, http.StatusBadRequest, "please select a provider, such as casdoor.")
 		return
 	}
 	oauthManager := providers.GetManager()
@@ -67,15 +67,15 @@ func (s *Server) loginHandler(c *gin.Context) {
 		PluginVersion: c.DefaultQuery("plugin_version", ""),
 	})
 	if err != nil {
-		response.JSONError(c, http.StatusInternalServerError, err.Error())
+		response.JSONError(c, http.StatusInternalServerError, fmt.Sprintf("failed to encrypt data, %s", err))
 		return
 	}
 	providerInstance, err := oauthManager.GetProvider(provider)
 	if providerInstance == nil || err != nil {
-		response.JSONError(c, http.StatusBadRequest, "login method does not exist")
+		response.JSONError(c, http.StatusBadRequest, "this login method is not supported, please choose SMS or GitHub.")
 		return
 	}
-	authURL := providerInstance.GetAuthURL(encryptedData, "")
+	authURL := providerInstance.GetAuthURL(encryptedData, s.BaseURL+constants.LoginCallbackURI)
 	c.Redirect(http.StatusFound, authURL)
 }
 
@@ -84,18 +84,18 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
 	encryptedData := c.DefaultQuery("state", "")
 	if code == "" {
-		response.JSONError(c, http.StatusBadRequest, "code is required")
+		response.JSONError(c, http.StatusBadRequest, errs.ParmaNeedErr("code").Error())
 		return
 	}
 	if encryptedData == "" {
-		response.JSONError(c, http.StatusBadRequest, "state is required")
+		response.JSONError(c, http.StatusInternalServerError, errs.ParmaNeedErr("state").Error())
 		return
 	}
 
 	// Decrypt the required data using AES.
 	var parameterCarrier ParameterCarrier
 	if err := getDecryptedData(encryptedData, &parameterCarrier); err != nil {
-		handleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("failed to decrypt data, %v", err))
 		return
 	}
 
@@ -104,7 +104,7 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider(provider)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	userAlreadyExist, err := repository.GetDB().GetUserByDeviceConditions(ctx, map[string]any{
@@ -112,8 +112,8 @@ func (s *Server) callbackHandler(c *gin.Context) {
 		"vscode_version": parameterCarrier.VscodeVersion,
 	})
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to obtain user information :%s", err.Error())
-		response.JSONError(c, http.StatusInternalServerError, errMsg)
+		errMsg := fmt.Errorf("%s :%s", errs.ErrQueryUserInfo, err.Error())
+		response.HandleError(c, http.StatusUnauthorized, errMsg)
 		return
 	}
 	// If the mac and vs are the same, it can be determined that they are the same vs login.
@@ -121,14 +121,11 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	if userAlreadyExist != nil {
 		index := findDeviceIndex(userAlreadyExist, parameterCarrier.MachineCode, parameterCarrier.VscodeVersion)
 		if index == -1 {
-			errMsg := fmt.Sprintf("Error: device with machine_code %s not found in user %s, though user was found by it.",
-				parameterCarrier.MachineCode, userAlreadyExist.ID)
-			log.Error(nil, errMsg)
-			response.JSONError(c, http.StatusInternalServerError, errMsg)
+			response.HandleError(c, http.StatusUnauthorized, errs.ErrQueryUserInfo)
 			return
 		} else {
 			// There will be no concurrent logins on the same device
-			userAlreadyExist.Devices[index].Status = constants.LoginStatusLoggedOut
+			userAlreadyExist.Devices[index].Status = constants.LoginStatusLoggedOffline
 			userAlreadyExist.Devices[index].AccessTokenHash = ""
 			userAlreadyExist.Devices[index].AccessToken = ""
 			userAlreadyExist.Devices[index].RefreshTokenHash = ""
@@ -137,9 +134,8 @@ func (s *Server) callbackHandler(c *gin.Context) {
 			userAlreadyExist.UpdatedAt = time.Now()
 			err := repository.GetDB().Upsert(ctx, userAlreadyExist, constants.DBIndexField, userAlreadyExist.ID)
 			if err != nil {
-				errMsg := "failed to delete old login information"
-				log.Error(nil, errMsg)
-				response.JSONError(c, http.StatusInternalServerError, errMsg)
+				errMsg := fmt.Errorf("failed to delete old login information: %v", err)
+				response.HandleError(c, http.StatusInternalServerError, errMsg)
 				return
 			}
 		}
@@ -147,12 +143,16 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	// Use the code to get the token and user info.
 	user, err := GetUserByOauth(ctx, platform, code, &parameterCarrier)
 	if err != nil {
-		response.JSONError(c, http.StatusInternalServerError, err.Error())
+		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %v", errs.ErrQueryUserInfo, err))
+		return
+	}
+	if user == nil {
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrInvalidToken)
 		return
 	}
 	err = providerInstance.Update(ctx, user)
 	if err != nil {
-		response.JSONError(c, http.StatusBadRequest, fmt.Sprintf("Failed to update user info: %v", err))
+		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %v", errs.ErrUpdateUserInfo, err))
 		return
 	}
 	c.Redirect(http.StatusFound, providerInstance.GetEndpoint()+constants.LoginSuccessPath)
@@ -166,14 +166,13 @@ func GetUserByOauth(ctx context.Context, typ, code string, parm *ParameterCarrie
 	if err != nil {
 		return nil, err
 	}
-
 	token, err := providerInstance.ExchangeToken(ctx, code)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get token info: %v", err)
+		return nil, fmt.Errorf("%v", err)
 	}
 	user, userErr := providerInstance.GetUserInfo(ctx, token.AccessToken)
 	if userErr != nil {
-		return nil, fmt.Errorf("failed to get user info: %v", userErr)
+		return nil, fmt.Errorf("%s: %v", errs.ErrQueryUserInfo, userErr)
 	}
 	if typ == "plugin" {
 		mac := parm.MachineCode
@@ -181,13 +180,15 @@ func GetUserByOauth(ctx context.Context, typ, code string, parm *ParameterCarrie
 		vsVersion := parm.VscodeVersion
 		pVersion := parm.PluginVersion
 
-		var tokenProvider, refreshToken string
+		var tokenProvider, refreshToken, accessToken string
 		if provider == "casdoor" {
 			refreshToken = token.RefreshToken
-			tokenProvider = "custom"
+			accessToken = token.AccessToken
+			tokenProvider = "custom" // Use a token generated by a provider (custom) or a token generated by the service
 		}
-
-		user.ID = uuid.New()
+		if user.ID == uuid.Nil {
+			user.ID = uuid.New()
+		}
 		user.Devices = append(user.Devices, repository.Device{
 			ID:            uuid.New(),
 			CreatedAt:     time.Now(),
@@ -197,6 +198,7 @@ func GetUserByOauth(ctx context.Context, typ, code string, parm *ParameterCarrie
 			VSCodeVersion: vsVersion,
 			PluginVersion: pVersion,
 			RefreshToken:  refreshToken,
+			AccessToken:   accessToken,
 			Provider:      provider,
 			Platform:      "plugin",
 			Status:        constants.LoginStatusLoggedOut,

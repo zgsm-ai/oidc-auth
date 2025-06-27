@@ -18,9 +18,9 @@ var (
 type Config struct {
 	Level    string `json:"level" mapstructure:"level"`
 	Filename string `json:"filename" mapstructure:"filename"`
-	MaxSize  int    `json:"maxSize" mapstructure:"maxSize"`   // Maximum size of each log file (MB)	MaxBackups int    `json:"maxBackups" mapstructure:"maxBackups"` // Maximum number of old log files to keep
-	MaxAge   int    `json:"maxAge" mapstructure:"maxAge"`     // Maximum number of days to keep old log files
-	Compress bool   `json:"compress" mapstructure:"compress"` // Whether to compress old log files
+	MaxSize  int    `json:"maxSize" mapstructure:"maxSize"`
+	MaxAge   int    `json:"maxAge" mapstructure:"maxAge"`
+	Compress bool   `json:"compress" mapstructure:"compress"`
 }
 
 // InitLogger initializes the global logger

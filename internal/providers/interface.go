@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
@@ -36,8 +37,8 @@ type OAuthProvider interface {
 type ProviderConfig struct {
 	ClientID     string
 	ClientSecret string
-	RedirectURL  string
-	Endpoint     string
+	BaseURL      string
+	Client       *http.Client
 }
 
 type ProviderFactory interface {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
 	"github.com/zgsm-ai/oidc-auth/pkg/utils"
 )
@@ -21,8 +21,7 @@ type CasdoorFactory struct{}
 type casdoorConfig struct {
 	ClientID     string
 	ClientSecret string
-	RedirectURL  string
-	Endpoint     string
+	BaseURL      string
 	Scopes       []string
 }
 
@@ -45,12 +44,11 @@ func (f *CasdoorFactory) CreateProvider(config *ProviderConfig) OAuthProvider {
 
 func NewCasdoorProvider(config *ProviderConfig) *CasdoorProvider {
 	return &CasdoorProvider{
-		httpClient: &http.Client{},
+		httpClient: config.Client,
 		config: &casdoorConfig{
 			ClientID:     config.ClientID,
 			ClientSecret: config.ClientSecret,
-			RedirectURL:  config.RedirectURL,
-			Endpoint:     config.Endpoint,
+			BaseURL:      config.BaseURL,
 		},
 	}
 }
@@ -66,13 +64,13 @@ func (s *CasdoorProvider) ExchangeToken(ctx context.Context, code string) (*Toke
 	data.Set("client_secret", s.config.ClientSecret)
 	data.Set("client_id", s.config.ClientID)
 
-	getTokenURL := s.config.Endpoint + constants.CasdoorTokenURI
+	getTokenURL := s.config.BaseURL + constants.CasdoorTokenURI
 	req, err := http.NewRequest(http.MethodPost, getTokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpClient := &http.Client{}
+	httpClient := s.httpClient
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request token: %w", err)
@@ -106,11 +104,6 @@ func (s *CasdoorProvider) Update(ctx context.Context, data *repository.AuthUser)
 		if err != nil {
 			return fmt.Errorf("failed to get user: %w", err)
 		}
-	} else if data.Email != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "email", data.Email)
-		if err != nil {
-			return fmt.Errorf("failed to get user: %w", err)
-		}
 	} else {
 		return fmt.Errorf("user must have either github_id, phone, or email")
 	}
@@ -132,10 +125,8 @@ func (s *CasdoorProvider) Update(ctx context.Context, data *repository.AuthUser)
 			err = repository.GetDB().Upsert(ctx, data, "github_id", data.GithubID)
 		} else if data.Phone != "" {
 			err = repository.GetDB().Upsert(ctx, data, "phone", data.Phone)
-		} else if data.Email != "" {
-			// custom login
-			data.EmployeeNumber = data.Name
-			err = repository.GetDB().Upsert(ctx, data, "email", data.Email)
+		} else {
+			return fmt.Errorf("user must have either github_id, phone, or email")
 		}
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
@@ -150,6 +141,7 @@ func (s *CasdoorProvider) Update(ctx context.Context, data *repository.AuthUser)
 	existingUser.Phone = data.Phone
 	existingUser.Vip = data.Vip
 	existingUser.EmployeeNumber = data.EmployeeNumber
+	existingUser.ID = data.ID
 
 	newDevice := data.Devices[0]
 	newDevice.UpdatedAt = time.Now()
@@ -170,7 +162,6 @@ func (s *CasdoorProvider) Update(ctx context.Context, data *repository.AuthUser)
 	for i, device := range existingUser.Devices {
 		if device.MachineCode == newDevice.MachineCode && device.VSCodeVersion == newDevice.VSCodeVersion {
 			newDevice.CreatedAt = device.CreatedAt
-
 			if newDevice.DeviceCode == "" {
 				newDevice.DeviceCode = existingUser.Devices[i].DeviceCode
 			}
@@ -200,11 +191,6 @@ func (s *CasdoorProvider) Update(ctx context.Context, data *repository.AuthUser)
 		if err != nil {
 			return fmt.Errorf("failed to get user: %w", err)
 		}
-	} else if data.Email != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "email", data.Email)
-		if err != nil {
-			return fmt.Errorf("failed to get user: %w", err)
-		}
 	} else {
 		return fmt.Errorf("user must have either github_id, phone, or email")
 	}
@@ -216,20 +202,63 @@ func (s *CasdoorProvider) GetUserInfo(ctx context.Context, accessToken string) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode AESEncrypt payload: %w", err)
 	}
-	githubID, _ := payload.CustomClaims["github"].(string)
+	/*
+		Meeting the following conditions indicates that custom login is used
+		casdoor -> /providers/admin/customAuth -> User mapping
+			{
+			   "id": "employee_number",
+			   "username": "username",
+			   "displayName": "username",
+			   "email": "phone_number",
+			   "avatarUrl": ""
+			  }
+	*/
 	name, _ := payload.CustomClaims["name"].(string)
-	var githubName string
-	if githubID != "" {
-		githubName = payload.CustomClaims["displayName"].(string)
+	phone, _ := payload.CustomClaims["phone"].(string)
+	universalID, _ := payload.CustomClaims["universal_id"].(string)
+
+	var githubID, githubName, customName, employeeNum, email string
+
+	id, err := uuid.Parse(universalID)
+	if err != nil {
+		return nil, err
+	}
+
+	customPayload, ok := payload.CustomClaims["properties"].(map[string]any)
+	if ok && len(customPayload) != 0 {
+		githubID, _ = customPayload["oauth_GitHub_id"].(string)
+		githubName, _ = customPayload["oauth_GitHub_username"].(string)
+		customName, _ = customPayload["oauth_Custom_username"].(string)
+		employeeNum, _ = customPayload["oauth_Custom_id"].(string)
+		customPhone, _ := customPayload["oauth_Custom_email"].(string)
+		if githubID != "" {
+			email, _ = payload.CustomClaims["email"].(string)
+		}
+		if customPhone != "" {
+			phone = customPhone
+		}
+		if githubName != "" {
+			name = githubName
+		} else if customName != "" {
+			name = customName + employeeNum
+		}
+	} else {
+		name = phone
+	}
+
+	if strings.Contains(phone, "+86") {
+		phone = strings.ReplaceAll(phone, "+86", "")
 	}
 	user := &repository.AuthUser{
-		Phone:      payload.CustomClaims["phone"].(string),
-		GithubID:   githubID,
-		Email:      payload.CustomClaims["email"].(string),
-		Name:       name,
-		GithubName: githubName,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		ID:             id,
+		Phone:          phone,
+		GithubID:       githubID,
+		Email:          email,
+		Name:           name,
+		GithubName:     githubName,
+		EmployeeNumber: employeeNum,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 	return user, nil
 }
@@ -240,7 +269,7 @@ func (s *CasdoorProvider) RefreshToken(ctx context.Context, refreshToken string)
 	data.Set("grant_type", "refresh_token")
 	data.Set("client_secret", s.config.ClientSecret)
 	data.Set("client_id", s.config.ClientID)
-	refreshTokenURL := s.config.Endpoint + constants.CasdoorRefreshTokenURI
+	refreshTokenURL := s.config.BaseURL + constants.CasdoorRefreshTokenURI
 	req, err := http.NewRequest(http.MethodPost, refreshTokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -266,14 +295,11 @@ func (s *CasdoorProvider) RefreshToken(ctx context.Context, refreshToken string)
 }
 
 func (s *CasdoorProvider) GetAuthURL(state, redirectURL string) string {
-	if redirectURL == "" {
-		redirectURL = url.QueryEscape(s.config.RedirectURL)
-	}
-	return s.config.Endpoint + constants.CasdoorAuthURI + "?client_id=" + s.config.ClientID + "&state=" + state + "&redirect_uri=" + redirectURL + "&response_type=code"
+	return s.config.BaseURL + constants.CasdoorAuthURI + "?client_id=" + s.config.ClientID + "&state=" + state + "&redirect_uri=" + redirectURL + "&response_type=code"
 }
 
 func (s *CasdoorProvider) GetEndpoint() string {
-	return s.config.Endpoint
+	return s.config.BaseURL
 }
 
 func (s *CasdoorProvider) ValidateToken(ctx context.Context, accessToken string) error {

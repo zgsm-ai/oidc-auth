@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 	"net/http"
 	"time"
 
@@ -27,14 +28,14 @@ func logoutHandler(c *gin.Context) {
 		defer cancel()
 		user, index, err := utils.GetUserByTokenHash(ctx, accessToken, "access_token_hash")
 		if err != nil {
-			response.JSONError(c, http.StatusBadRequest, err.Error())
+			response.HandleError(c, http.StatusBadRequest, fmt.Errorf("%s, %s", errs.ErrQueryUserInfo, err))
 			return
 		}
-		if user == nil {
-			response.JSONError(c, http.StatusInternalServerError, "failed to find user")
+		if user == nil || index == -1 {
+			response.HandleError(c, http.StatusUnauthorized, errs.ErrInvalidToken)
 			return
 		}
-		user.Devices[index].Status = constants.LoginStatusLoggedOut
+		user.Devices[index].Status = constants.LoginStatusLoggedOffline
 		user.Devices[index].RefreshTokenHash = ""
 		user.Devices[index].RefreshToken = ""
 		user.Devices[index].AccessTokenHash = ""
@@ -42,14 +43,13 @@ func logoutHandler(c *gin.Context) {
 		user.UpdatedAt = time.Now()
 		err = repository.GetDB().Upsert(ctx, user, constants.DBIndexField, user.ID)
 		if err != nil {
-			response.JSONError(c, http.StatusBadRequest, err.Error())
+			response.HandleError(c, http.StatusBadRequest, fmt.Errorf("%s, %s", errs.ErrUpdateUserInfo, err))
 			return
 		}
 	}
-	response.JSONSuccess(c, gin.H{
-		"state":   c.DefaultQuery("state", ""),
-		"status":  constants.LoginStatusLoggedOut,
-		"message": "user logged out",
+	response.JSONSuccess(c, "", gin.H{
+		"state":  c.DefaultQuery("state", ""),
+		"status": constants.LoginStatusLoggedOffline,
 	})
 	return
 }
@@ -63,20 +63,19 @@ func statusHandler(c *gin.Context) {
 	}
 	accessToken, err := getTokenFromHeader(c)
 	if err != nil {
-		response.JSONError(c, http.StatusBadRequest, "token needs to be passed")
+		response.JSONError(c, http.StatusBadRequest, errs.ParmaNeedErr("access_token").Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	user, index, err := utils.GetUserByTokenHash(ctx, accessToken, "access_token_hash")
-	if user == nil {
-		response.JSONError(c, http.StatusBadRequest, "invalid token")
+	if user == nil || index == -1 {
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrInvalidToken)
 		return
 	}
 	status := user.Devices[index].Status
-	response.JSONSuccess(c, gin.H{
-		"state":   c.DefaultQuery("state", ""),
-		"status":  status,
-		"message": fmt.Sprintf("the user is %s", status),
+	response.JSONSuccess(c, fmt.Sprintf("the user is %s", status), gin.H{
+		"state":  c.DefaultQuery("state", ""),
+		"status": status,
 	})
 }

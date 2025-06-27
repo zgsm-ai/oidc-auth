@@ -51,7 +51,7 @@ func SetGlobalConfig(cfg *config.AppConfig) {
 }
 
 func (m *EncryptKeyManager) loadKeys() error {
-	if m.Config.EnableRsa == "false" {
+	if !m.Config.EnableRsa {
 		return nil
 	}
 	m.mu.Lock()
@@ -96,7 +96,7 @@ func (m *EncryptKeyManager) ReloadKeys() error {
 }
 
 func (m *EncryptKeyManager) AESEncrypt(plaintext []byte) (string, error) {
-	key := m.aesKey
+	key := m.Config.AesKey
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
 		return "", fmt.Errorf("failed to create cipher: %w", err)
@@ -118,7 +118,7 @@ func (m *EncryptKeyManager) AESEncrypt(plaintext []byte) (string, error) {
 }
 
 func (m *EncryptKeyManager) AESDecrypt(encryptedText string) ([]byte, error) {
-	key := m.aesKey
+	key := m.Config.AesKey
 	ciphertext, err := base64.URLEncoding.DecodeString(encryptedText)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode base64: %w", err)

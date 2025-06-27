@@ -2,17 +2,17 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
+	"net/http"
 
 	"github.com/zgsm-ai/oidc-auth/internal/middleware"
 	"github.com/zgsm-ai/oidc-auth/pkg/log"
 )
 
 type Server struct {
-	ServerPort      string
-	SessionSecret   string
-	Endpoint        string
-	BaseURL         string
-	LoginSuccessURL string
+	ServerPort string
+	BaseURL    string
+	HTTPClient *http.Client
+	IsPrivate  bool
 }
 
 type ParameterCarrier struct {
@@ -31,7 +31,7 @@ func (s *Server) SetupRouter(r *gin.Engine) {
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.RequestLogger())
 
-	pluginOauthServer := r.Group("/oidc_auth/plugin",
+	pluginOauthServer := r.Group("/oidc-auth/api/v1/plugin",
 		middleware.SetPlatform("plugin"),
 	)
 	{
@@ -41,16 +41,20 @@ func (s *Server) SetupRouter(r *gin.Engine) {
 		pluginOauthServer.GET("login/logout", logoutHandler)
 		pluginOauthServer.GET("login/status", statusHandler)
 	}
-	webOauthServer := r.Group("/oidc_auth/manager",
+	webOauthServer := r.Group("/oidc-auth/api/v1/manager",
 		middleware.SetPlatform("web"),
 	)
 	{
 		webOauthServer.GET("token", getTokenByHash)
-		webOauthServer.GET("bind/account", bindAccount)
-		webOauthServer.GET("bind/account/callback", bindAccountCallback)
-		webOauthServer.GET("userinfo", userInfoHandler)
+		webOauthServer.GET("bind/account", s.bindAccount)
+		webOauthServer.GET("bind/account/callback", s.bindAccountCallback)
+		webOauthServer.GET("userinfo", s.userInfoHandler)
 	}
-	r.POST("/oidc_auth/send/sms", SMSHandler)
+	r.POST("/oidc-auth/api/v1/send/sms", s.SMSHandler)
+	health := r.Group("/health")
+	{
+		health.GET("ready", readinessHandler)
+	}
 }
 
 func (s *Server) StartServer() error {
