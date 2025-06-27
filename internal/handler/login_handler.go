@@ -75,7 +75,7 @@ func (s *Server) loginHandler(c *gin.Context) {
 		response.JSONError(c, http.StatusBadRequest, "this login method is not supported, please choose SMS or GitHub.")
 		return
 	}
-	authURL := providerInstance.GetAuthURL(encryptedData, "")
+	authURL := providerInstance.GetAuthURL(encryptedData, s.BaseURL+constants.LoginCallbackURI)
 	c.Redirect(http.StatusFound, authURL)
 }
 

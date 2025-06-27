@@ -86,7 +86,6 @@ type SMSConfig struct {
 type ProviderConfig struct {
 	ClientID     string `json:"clientID" mapstructure:"clientID"`
 	ClientSecret string `json:"clientSecret" mapstructure:"clientSecret"`
-	RedirectURL  string `json:"redirectURL" mapstructure:"redirectURL"`
 	EncryptKey   string `json:"encryptKey" mapstructure:"encryptKey"`
 	BaseURL      string `json:"baseURL" mapstructure:"baseURL"`
 }

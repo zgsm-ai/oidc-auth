@@ -46,7 +46,7 @@ func (s *Server) SetupRouter(r *gin.Engine) {
 	)
 	{
 		webOauthServer.GET("token", getTokenByHash)
-		webOauthServer.GET("bind/account", bindAccount)
+		webOauthServer.GET("bind/account", s.bindAccount)
 		webOauthServer.GET("bind/account/callback", s.bindAccountCallback)
 		webOauthServer.GET("userinfo", s.userInfoHandler)
 	}

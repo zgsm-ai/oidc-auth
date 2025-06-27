@@ -21,7 +21,6 @@ type CasdoorFactory struct{}
 type casdoorConfig struct {
 	ClientID     string
 	ClientSecret string
-	RedirectURL  string
 	BaseURL      string
 	Scopes       []string
 }
@@ -49,7 +48,6 @@ func NewCasdoorProvider(config *ProviderConfig) *CasdoorProvider {
 		config: &casdoorConfig{
 			ClientID:     config.ClientID,
 			ClientSecret: config.ClientSecret,
-			RedirectURL:  config.RedirectURL,
 			BaseURL:      config.BaseURL,
 		},
 	}
@@ -297,9 +295,6 @@ func (s *CasdoorProvider) RefreshToken(ctx context.Context, refreshToken string)
 }
 
 func (s *CasdoorProvider) GetAuthURL(state, redirectURL string) string {
-	if redirectURL == "" {
-		redirectURL = url.QueryEscape(s.config.RedirectURL)
-	}
 	return s.config.BaseURL + constants.CasdoorAuthURI + "?client_id=" + s.config.ClientID + "&state=" + state + "&redirect_uri=" + redirectURL + "&response_type=code"
 }
 

@@ -62,10 +62,9 @@ docker build -t oidc-auth:latest .
 docker run -d \
   --name oidc-auth \
   -p 8080:8080 \
-  -e SERVER_BASEURL="http://localhost:8080" \
+  -e SERVER_BASEURL="<server_base_url>" \
   -e PROVIDERS_CASDOOR_CLIENTSECRET="<casdoor_client_secret>" \
   -e PROVIDERS_CASDOOR_CLIENTID="<casdoor_client_id>" \
-  -e PROVIDERS_CASDOOR_REDIRECTURL="<casdoor_redirect_url>" \
   -e PROVIDERS_CASDOOR_BASEURL="<casdoor_base_url>" \
   -e SMS_ENABLEDTEST="false" \
   -e SYNCSTAR_ENABLED="false" \
@@ -88,7 +87,6 @@ Complete environment variable configuration for containerized deployment:
 | | `SERVER_ISPRIVATE` | Private network mode | `false` |
 | **Authentication Provider** | `PROVIDERS_CASDOOR_CLIENTID` | Casdoor client ID | - |
 | | `PROVIDERS_CASDOOR_CLIENTSECRET` | Casdoor client secret | - |
-| | `PROVIDERS_CASDOOR_REDIRECTURL` | OAuth callback URL | - |
 | | `PROVIDERS_CASDOOR_BASEURL` | Casdoor service address | - |
 | **Database Configuration** | `DATABASE_TYPE` | Database type | `postgres` |
 | | `DATABASE_HOST` | Database host | `localhost` |

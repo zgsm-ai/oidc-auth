@@ -27,7 +27,6 @@ data:
       casdoor:
         clientID: {{ .Values.providers.casdoor.clientID | quote }}
         clientSecret: "PROVIDERS_CASDOOR__CLIENTSECRET"
-        redirectURL: {{ .Values.providers.casdoor.redirectURL | quote }}
         baseURL: {{ .Values.providers.casdoor.baseURL | quote }}
     syncStar:
       enabled: {{ .Values.syncStar.enabled | quote }}

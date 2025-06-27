@@ -61,10 +61,9 @@ docker build -t oidc-auth:latest .
 docker run -d \
   --name oidc-auth \
   -p 8080:8080 \
-  -e SERVER_BASEURL="http://localhost:8080" \
+  -e SERVER_BASEURL="<server_base_url>" \
   -e PROVIDERS_CASDOOR_CLIENTSECRET="<casdoor_client_secret>" \
   -e PROVIDERS_CASDOOR_CLIENTID="<casdoor_client_id>" \
-  -e PROVIDERS_CASDOOR_REDIRECTURL="<casdoor_redirect_url>" \
   -e PROVIDERS_CASDOOR_BASEURL="<casdoor_base_url>" \
   -e SMS_ENABLEDTEST="false" \
   -e SYNCSTAR_ENABLED="false" \
@@ -87,7 +86,6 @@ docker run -d \
 |                   | `SERVER_ISPRIVATE` | 内网模式 | `false` |
 | **认证提供商**         | `PROVIDERS_CASDOOR_CLIENTID` | Casdoor 客户端ID | - |
 |                   | `PROVIDERS_CASDOOR_CLIENTSECRET` | Casdoor 客户端密钥 | - |
-|                   | `PROVIDERS_CASDOOR_REDIRECTURL` | OAuth 回调URL | - |
 |                   | `PROVIDERS_CASDOOR_BASEURL` | Casdoor 服务地址 | - |
 | **数据库配置**         | `DATABASE_TYPE` | 数据库类型 | `postgres` |
 |                   | `DATABASE_HOST` | 数据库主机 | `localhost` |

@@ -37,7 +37,6 @@ type OAuthProvider interface {
 type ProviderConfig struct {
 	ClientID     string
 	ClientSecret string
-	RedirectURL  string
 	BaseURL      string
 	Client       *http.Client
 }

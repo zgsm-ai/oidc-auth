@@ -109,7 +109,6 @@ var serveCmd = &cobra.Command{
 			providerCfg[name] = &providers.ProviderConfig{
 				ClientID:     p.ClientID,
 				ClientSecret: p.ClientSecret,
-				RedirectURL:  p.RedirectURL,
 				BaseURL:      p.BaseURL,
 				Client:       httpClient,
 			}

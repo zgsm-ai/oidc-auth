@@ -63,7 +63,7 @@ func getDecryptedData(encryptedData string, result any) error {
 	return json.Unmarshal(decrypted, result)
 }
 
-func bindAccount(c *gin.Context) {
+func (s *Server) bindAccount(c *gin.Context) {
 	token, err := getTokenFromHeader(c)
 	if err != nil {
 		response.HandleError(c, http.StatusBadRequest, err)
@@ -79,7 +79,7 @@ func bindAccount(c *gin.Context) {
 		return
 	}
 
-	if serverConfig.BaseURL == "" {
+	if s.BaseURL == "" {
 		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("base URL is not configured"))
 		return
 	}
@@ -92,7 +92,7 @@ func bindAccount(c *gin.Context) {
 		return
 	}
 
-	redirectURL := fmt.Sprintf("%s%s", serverConfig.BaseURL, constants.BindAccountCallbackURI)
+	redirectURL := fmt.Sprintf("%s%s", s.BaseURL, constants.BindAccountCallbackURI)
 	bindType := c.DefaultQuery("bindType", "")
 	var bindParm string
 	if bindType == "github" {

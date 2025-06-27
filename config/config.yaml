@@ -45,9 +45,6 @@ providers:
     # Client secret for OAuth application authentication
     clientSecret: ""
 
-    # Callback URL after successful OAuth authentication
-    redirectURL: "https://<host>/oidc-auth/api/v1/plugin/login/callback"
-
     # Casdoor server base URL
     baseURL: "https://<host>"
 
