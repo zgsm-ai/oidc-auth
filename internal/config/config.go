@@ -88,6 +88,7 @@ type ProviderConfig struct {
 	ClientSecret string `json:"clientSecret" mapstructure:"clientSecret"`
 	EncryptKey   string `json:"encryptKey" mapstructure:"encryptKey"`
 	BaseURL      string `json:"baseURL" mapstructure:"baseURL"`
+	InternalURL  string `json:"internalURL" mapstructure:"internalURL"`
 }
 
 const (

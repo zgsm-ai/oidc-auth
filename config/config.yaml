@@ -45,8 +45,11 @@ providers:
     # Client secret for OAuth application authentication
     clientSecret: ""
 
-    # Casdoor server base URL
+    # Casdoor server base URL, for callback address
     baseURL: "https://<host>"
+
+    # Used to obtain tokens, etc. If provided, it is used, if not provided, the baseURL is used
+    internalURL: "http://test-svc.test-ns.svc.cluster.local:8000"
 
 # SMS service configuration for verification codes
 sms:

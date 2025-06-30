@@ -22,6 +22,7 @@ type casdoorConfig struct {
 	ClientID     string
 	ClientSecret string
 	BaseURL      string
+	InternalURL  string
 	Scopes       []string
 }
 
@@ -49,6 +50,7 @@ func NewCasdoorProvider(config *ProviderConfig) *CasdoorProvider {
 			ClientID:     config.ClientID,
 			ClientSecret: config.ClientSecret,
 			BaseURL:      config.BaseURL,
+			InternalURL:  config.InternalURL,
 		},
 	}
 }
@@ -64,7 +66,7 @@ func (s *CasdoorProvider) ExchangeToken(ctx context.Context, code string) (*Toke
 	data.Set("client_secret", s.config.ClientSecret)
 	data.Set("client_id", s.config.ClientID)
 
-	getTokenURL := s.config.BaseURL + constants.CasdoorTokenURI
+	getTokenURL := s.GetEndpoint(true) + constants.CasdoorTokenURI
 	req, err := http.NewRequest(http.MethodPost, getTokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -269,7 +271,7 @@ func (s *CasdoorProvider) RefreshToken(ctx context.Context, refreshToken string)
 	data.Set("grant_type", "refresh_token")
 	data.Set("client_secret", s.config.ClientSecret)
 	data.Set("client_id", s.config.ClientID)
-	refreshTokenURL := s.config.BaseURL + constants.CasdoorRefreshTokenURI
+	refreshTokenURL := s.GetEndpoint(true) + constants.CasdoorRefreshTokenURI
 	req, err := http.NewRequest(http.MethodPost, refreshTokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -298,7 +300,10 @@ func (s *CasdoorProvider) GetAuthURL(state, redirectURL string) string {
 	return s.config.BaseURL + constants.CasdoorAuthURI + "?client_id=" + s.config.ClientID + "&state=" + state + "&redirect_uri=" + redirectURL + "&response_type=code"
 }
 
-func (s *CasdoorProvider) GetEndpoint() string {
+func (s *CasdoorProvider) GetEndpoint(isInternal bool) string {
+	if isInternal {
+		return s.config.InternalURL
+	}
 	return s.config.BaseURL
 }
 

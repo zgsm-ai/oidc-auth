@@ -28,6 +28,7 @@ data:
         clientID: {{ .Values.providers.casdoor.clientID | quote }}
         clientSecret: "PROVIDERS_CASDOOR__CLIENTSECRET"
         baseURL: {{ .Values.providers.casdoor.baseURL | quote }}
+        internalURL: "http://test-svc.test-ns.svc.cluster.local:8000"
     syncStar:
       enabled: {{ .Values.syncStar.enabled | quote }}
       personalToken: "SYNCSTAR_PERSONALTOKEN"
