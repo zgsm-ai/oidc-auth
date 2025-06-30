@@ -49,6 +49,7 @@ type Device struct {
 	MachineCode      string    `json:"machine_code"`
 	VSCodeVersion    string    `json:"vscode_version"`
 	PluginVersion    string    `json:"plugin_version"`
+	State            string    `json:"state"`
 	RefreshTokenHash string    `json:"refresh_token_hash"`
 	RefreshToken     string    `json:"refresh_token"`
 	AccessToken      string    `json:"access_token"`

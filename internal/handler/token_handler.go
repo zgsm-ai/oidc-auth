@@ -28,10 +28,14 @@ func tokenHandler(c *gin.Context) {
 		response.JSONError(c, http.StatusBadRequest, errs.ParmaNeedErr("machine_code or vscode_version").Error())
 		return
 	}
+	if query.State == "" {
+		response.JSONError(c, http.StatusBadRequest, errs.ParmaNeedErr("state").Error())
+		return
+	}
 	// if MachineCode is provided, get the token for the first time
 	// the account should have been pre-registered.
 	if query.MachineCode != "" {
-		tokenPair, code, err := firstGetToken(query.MachineCode, query.VscodeVersion)
+		tokenPair, code, err := firstGetToken(query.MachineCode, query.VscodeVersion, query.State)
 		if err != nil {
 			response.JSONError(c, code, err.Error())
 			return
@@ -68,7 +72,7 @@ func tokenHandler(c *gin.Context) {
 	})
 }
 
-func firstGetToken(machineCode, vscodeVersion string) (*utils.TokenPair, int, error) {
+func firstGetToken(machineCode, vscodeVersion, state string) (*utils.TokenPair, int, error) {
 	if vscodeVersion == "" {
 		return nil, http.StatusUnauthorized, errs.ParmaNeedErr("vscode_version")
 	}
@@ -78,6 +82,7 @@ func firstGetToken(machineCode, vscodeVersion string) (*utils.TokenPair, int, er
 	user, err := db.GetUserByDeviceConditions(ctx, map[string]any{
 		"machine_code":   machineCode,
 		"vscode_version": vscodeVersion,
+		"state":          state,
 		"status":         constants.LoginStatusLoggedOut,
 	})
 	if err != nil {

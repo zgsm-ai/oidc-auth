@@ -61,10 +61,11 @@ func (s *Server) loginHandler(c *gin.Context) {
 	encryptedData, err := getEncryptedData(ParameterCarrier{
 		Provider:      provider,
 		Platform:      c.DefaultQuery("platform", ""),
-		MachineCode:   c.DefaultQuery("machine_code", ""),
-		VscodeVersion: c.DefaultQuery("vscode_version", ""),
-		UriScheme:     c.DefaultQuery("uri_scheme", ""),
-		PluginVersion: c.DefaultQuery("plugin_version", ""),
+		MachineCode:   queryParams.MachineCode,
+		VscodeVersion: queryParams.VscodeVersion,
+		UriScheme:     queryParams.UriScheme,
+		PluginVersion: queryParams.PluginVersion,
+		State:         queryParams.State,
 	})
 	if err != nil {
 		response.JSONError(c, http.StatusInternalServerError, fmt.Sprintf("failed to encrypt data, %s", err))
@@ -101,6 +102,11 @@ func (s *Server) callbackHandler(c *gin.Context) {
 
 	provider := parameterCarrier.Provider
 	platform := parameterCarrier.Platform
+	state := parameterCarrier.State
+	if state == "" {
+		response.HandleError(c, http.StatusInternalServerError, errs.ParmaNeedErr("state"))
+		return
+	}
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider(provider)
 
@@ -134,7 +140,7 @@ func (s *Server) callbackHandler(c *gin.Context) {
 			userAlreadyExist.UpdatedAt = time.Now()
 			err := repository.GetDB().Upsert(ctx, userAlreadyExist, constants.DBIndexField, userAlreadyExist.ID)
 			if err != nil {
-				errMsg := fmt.Errorf("failed to delete old login information: %v", err)
+				errMsg := fmt.Errorf("failed to update login user information: %v", err) // TODO
 				response.HandleError(c, http.StatusInternalServerError, errMsg)
 				return
 			}
@@ -146,10 +152,11 @@ func (s *Server) callbackHandler(c *gin.Context) {
 		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %v", errs.ErrQueryUserInfo, err))
 		return
 	}
-	if user == nil {
+	if user == nil || len(user.Devices) == 0 {
 		response.HandleError(c, http.StatusUnauthorized, errs.ErrInvalidToken)
 		return
 	}
+	user.Devices[0].State = state
 	err = providerInstance.Update(ctx, user)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %v", errs.ErrUpdateUserInfo, err))
