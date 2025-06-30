@@ -42,18 +42,19 @@ func (s *Server) loginHandler(c *gin.Context) {
 	var queryParams requestQuery
 
 	if err := c.ShouldBindQuery(&queryParams); err != nil {
-		response.JSONError(c, http.StatusBadRequest, err.Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err.Error())
 		return
 	}
 	isPlugin := c.DefaultQuery("platform", "") == "plugin" // vscode plugin login
 	err := queryParams.validLoginParams(isPlugin)
 	if err != nil {
-		response.JSONError(c, http.StatusBadRequest, err.Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err.Error())
 		return
 	}
 	provider := c.DefaultQuery("provider", "") // Get the OAuth provider, such as GitHub or Casdoor.
 	if provider == "" {
-		response.JSONError(c, http.StatusBadRequest, "please select a provider, such as casdoor.")
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+			"please select a provider, such as casdoor.")
 		return
 	}
 	oauthManager := providers.GetManager()
@@ -68,12 +69,14 @@ func (s *Server) loginHandler(c *gin.Context) {
 		State:         queryParams.State,
 	})
 	if err != nil {
-		response.JSONError(c, http.StatusInternalServerError, fmt.Sprintf("failed to encrypt data, %s", err))
+		response.JSONError(c, http.StatusInternalServerError, errs.ErrDataEncryption,
+			fmt.Sprintf("failed to encrypt data, %s", err))
 		return
 	}
 	providerInstance, err := oauthManager.GetProvider(provider)
 	if providerInstance == nil || err != nil {
-		response.JSONError(c, http.StatusBadRequest, "this login method is not supported, please choose SMS or GitHub.")
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+			"this login method is not supported, please choose SMS or GitHub.")
 		return
 	}
 	authURL := providerInstance.GetAuthURL(encryptedData, s.BaseURL+constants.LoginCallbackURI)
@@ -85,18 +88,21 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
 	encryptedData := c.DefaultQuery("state", "")
 	if code == "" {
-		response.JSONError(c, http.StatusBadRequest, errs.ParmaNeedErr("code").Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+			errs.ParmaNeedErr("code").Error())
 		return
 	}
 	if encryptedData == "" {
-		response.JSONError(c, http.StatusInternalServerError, errs.ParmaNeedErr("state").Error())
+		response.JSONError(c, http.StatusInternalServerError, errs.ErrDataEncryption,
+			errs.ParmaNeedErr("state").Error())
 		return
 	}
 
 	// Decrypt the required data using AES.
 	var parameterCarrier ParameterCarrier
 	if err := getDecryptedData(encryptedData, &parameterCarrier); err != nil {
-		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("failed to decrypt data, %v", err))
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrDataDecryption,
+			fmt.Errorf("failed to decrypt data, %v", err))
 		return
 	}
 
@@ -104,7 +110,8 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	platform := parameterCarrier.Platform
 	state := parameterCarrier.State
 	if state == "" {
-		response.HandleError(c, http.StatusInternalServerError, errs.ParmaNeedErr("state"))
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrDataDecryption,
+			errs.ParmaNeedErr("state"))
 		return
 	}
 	oauthManager := providers.GetManager()
@@ -118,8 +125,8 @@ func (s *Server) callbackHandler(c *gin.Context) {
 		"vscode_version": parameterCarrier.VscodeVersion,
 	})
 	if err != nil {
-		errMsg := fmt.Errorf("%s :%s", errs.ErrQueryUserInfo, err.Error())
-		response.HandleError(c, http.StatusUnauthorized, errMsg)
+		errMsg := fmt.Errorf("%s :%s", errs.ErrInfoQueryUserInfo, err.Error())
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrUserNotFound, errMsg)
 		return
 	}
 	// If the mac and vs are the same, it can be determined that they are the same vs login.
@@ -127,7 +134,7 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	if userAlreadyExist != nil {
 		index := findDeviceIndex(userAlreadyExist, parameterCarrier.MachineCode, parameterCarrier.VscodeVersion)
 		if index == -1 {
-			response.HandleError(c, http.StatusUnauthorized, errs.ErrQueryUserInfo)
+			response.HandleError(c, http.StatusUnauthorized, errs.ErrUserNotFound, errs.ErrInfoQueryUserInfo)
 			return
 		} else {
 			// There will be no concurrent logins on the same device
@@ -136,12 +143,13 @@ func (s *Server) callbackHandler(c *gin.Context) {
 			userAlreadyExist.Devices[index].AccessToken = ""
 			userAlreadyExist.Devices[index].RefreshTokenHash = ""
 			userAlreadyExist.Devices[index].RefreshToken = ""
+			userAlreadyExist.Devices[index].State = ""
 			userAlreadyExist.Devices[index].UpdatedAt = time.Now()
 			userAlreadyExist.UpdatedAt = time.Now()
 			err := repository.GetDB().Upsert(ctx, userAlreadyExist, constants.DBIndexField, userAlreadyExist.ID)
 			if err != nil {
-				errMsg := fmt.Errorf("failed to update login user information: %v", err) // TODO
-				response.HandleError(c, http.StatusInternalServerError, errMsg)
+				errMsg := fmt.Errorf("failed to update login user information: %v", err)
+				response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo, errMsg)
 				return
 			}
 		}
@@ -149,17 +157,18 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	// Use the code to get the token and user info.
 	user, err := GetUserByOauth(ctx, platform, code, &parameterCarrier)
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %v", errs.ErrQueryUserInfo, err))
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound, fmt.Errorf("%s: %v", errs.ErrInfoQueryUserInfo, err))
 		return
 	}
 	if user == nil || len(user.Devices) == 0 {
-		response.HandleError(c, http.StatusUnauthorized, errs.ErrInvalidToken)
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrTokenInvalid, errs.ErrInfoInvalidToken)
 		return
 	}
 	user.Devices[0].State = state
 	err = providerInstance.Update(ctx, user)
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %v", errs.ErrUpdateUserInfo, err))
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
+			fmt.Errorf("%s: %v", errs.ErrInfoUpdateUserInfo, err))
 		return
 	}
 	c.Redirect(http.StatusFound, providerInstance.GetEndpoint(false)+constants.LoginSuccessPath)
@@ -179,7 +188,7 @@ func GetUserByOauth(ctx context.Context, typ, code string, parm *ParameterCarrie
 	}
 	user, userErr := providerInstance.GetUserInfo(ctx, token.AccessToken)
 	if userErr != nil {
-		return nil, fmt.Errorf("%s: %v", errs.ErrQueryUserInfo, userErr)
+		return nil, fmt.Errorf("%s: %v", errs.ErrInfoQueryUserInfo, userErr)
 	}
 	if typ == "plugin" {
 		mac := parm.MachineCode

@@ -3,10 +3,22 @@ package errs
 import "errors"
 
 var (
-	ErrInvalidToken   = errors.New("invalid token, no related account exists")
-	ErrQueryUserInfo  = errors.New("query user info fail")
-	ErrUpdateUserInfo = errors.New("update user info fail")
-	ErrGenerateToken  = errors.New("generate token fail")
+	ErrInfoInvalidToken   = errors.New("invalid token, no related account exists")
+	ErrInfoQueryUserInfo  = errors.New("query user info fail")
+	ErrInfoUpdateUserInfo = errors.New("update user info fail")
+	ErrInfoGenerateToken  = errors.New("generate token fail")
+)
+
+const (
+	ErrBadRequestParma = "oidc-auth.badRequestParameter"
+	ErrDataEncryption  = "oidc-auth.loginEncryptFailed"
+	ErrDataDecryption  = "oidc-auth.LoginDecryptFailed"
+	ErrUserNotFound    = "oidc-auth.userNotFound"
+	ErrTokenInvalid    = "oidc-auth.tokenInvalid"
+	ErrUpdateInfo      = "oidc-auth.updateInfoFailed"
+	ErrBindAccount     = "oidc-auth.bindAccountFailed"
+	ErrTokenGenerate   = "oidc-auth.tokenGenerateFailed"
+	ErrAuthentication  = "oidc-auth.authenticationFailed"
 )
 
 func ParmaNeedErr(name string) error {

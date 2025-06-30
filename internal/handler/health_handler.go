@@ -10,7 +10,7 @@ import (
 
 func readinessHandler(c *gin.Context) {
 	if repository.GetDB() == nil {
-		response.JSONError(c, http.StatusInternalServerError, "Database not initialized")
+		response.JSONError(c, http.StatusInternalServerError, "", "Database not initialized")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Application ready"})
