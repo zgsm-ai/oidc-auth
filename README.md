@@ -63,8 +63,8 @@ docker run -d \
   --name oidc-auth \
   -p 8080:8080 \
   -e SERVER_BASEURL="<server_base_url>" \
-  -e PROVIDERS_CASDOOR_CLIENTSECRET="<casdoor_client_secret>" \
   -e PROVIDERS_CASDOOR_CLIENTID="<casdoor_client_id>" \
+  -e PROVIDERS_CASDOOR_CLIENTSECRET="<casdoor_client_secret>" \
   -e PROVIDERS_CASDOOR_BASEURL="<casdoor_base_url>" \
   -e SMS_ENABLEDTEST="false" \
   -e SYNCSTAR_ENABLED="false" \

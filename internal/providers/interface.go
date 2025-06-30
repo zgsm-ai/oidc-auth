@@ -21,7 +21,7 @@ type TokenResponse struct {
 type OAuthProvider interface {
 	GetName() string
 
-	GetEndpoint() string
+	GetEndpoint(isInternal bool) string
 
 	GetAuthURL(state, redirectURL string) string
 
@@ -38,6 +38,7 @@ type ProviderConfig struct {
 	ClientID     string
 	ClientSecret string
 	BaseURL      string
+	InternalURL  string
 	Client       *http.Client
 }
 
