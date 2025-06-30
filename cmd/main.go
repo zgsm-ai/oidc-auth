@@ -111,6 +111,7 @@ var serveCmd = &cobra.Command{
 				ClientSecret: p.ClientSecret,
 				BaseURL:      p.BaseURL,
 				Client:       httpClient,
+				InternalURL:  p.InternalURL,
 			}
 		}
 		providers.InitializeProviders(providerCfg)

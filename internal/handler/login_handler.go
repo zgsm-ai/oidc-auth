@@ -155,7 +155,7 @@ func (s *Server) callbackHandler(c *gin.Context) {
 		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %v", errs.ErrUpdateUserInfo, err))
 		return
 	}
-	c.Redirect(http.StatusFound, providerInstance.GetEndpoint()+constants.LoginSuccessPath)
+	c.Redirect(http.StatusFound, providerInstance.GetEndpoint(false)+constants.LoginSuccessPath)
 }
 
 // GetUserByOauth Use the code to exchange for a token and generate user information

@@ -51,6 +51,9 @@ providers:
     # Casdoor server base URL
     baseURL: "https://<host>"
 
+    # Used to obtain tokens, etc. If provided, it is used, if not provided, the baseURL is used
+    internalURL: "http://eg-svc.eg-ns.svc.cluster.local:8000"
+
 # SMS service configuration for verification codes
 sms:
   # Enable test mode for SMS service. "true" = test mode, "false" = production mode
@@ -150,6 +153,20 @@ service:
   port: 8080
   targetPort: 8080
   nodePort: ""
+
+casdoor:
+  replicaCount: 1
+  image:
+    repository: "zgsm"
+    name: "casdoor"
+    tag: "v1.2.0"
+  database:
+    driver: "postgres"
+    host: ""
+    port: "5432"
+    databaseName: "casdoor"
+    user: "postgres"
+    password: ""
 
 image:
   pullPolicy: IfNotPresent

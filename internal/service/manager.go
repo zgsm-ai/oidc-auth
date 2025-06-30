@@ -31,8 +31,7 @@ type MergeResponse struct {
 }
 
 func MergeByCasdoor(provider providers.OAuthProvider, reservedUserToken, deletedUserToken string, httpClient *http.Client) (*MergeResponse, error) {
-	url := provider.GetEndpoint() + constants.CasdoorMergeURI
-
+	url := provider.GetEndpoint(true) + constants.CasdoorMergeURI
 	payload := MergeRequestPayload{
 		ReservedUserToken: reservedUserToken,
 		DeletedUserToken:  deletedUserToken,
