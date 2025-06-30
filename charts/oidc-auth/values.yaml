@@ -154,20 +154,6 @@ service:
   targetPort: 8080
   nodePort: ""
 
-casdoor:
-  replicaCount: 1
-  image:
-    repository: "zgsm"
-    name: "casdoor"
-    tag: "v1.2.0"
-  database:
-    driver: "postgres"
-    host: ""
-    port: "5432"
-    databaseName: "casdoor"
-    user: "postgres"
-    password: ""
-
 image:
   pullPolicy: IfNotPresent
   repository: "oidc-auth"
