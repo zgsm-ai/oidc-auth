@@ -37,7 +37,7 @@ func (s *Server) SMSHandler(c *gin.Context) {
 		messageContent = c.PostForm("code")
 	} else {
 		log.Error(c, "unsupported Content-Type: %s", contentType)
-		response.JSONError(c, http.StatusUnsupportedMediaType, "unsupported Content-Type")
+		response.JSONError(c, http.StatusUnsupportedMediaType, "", "unsupported Content-Type")
 		return
 	}
 	if phoneNumber == "" || messageContent == "" {
@@ -49,7 +49,7 @@ func (s *Server) SMSHandler(c *gin.Context) {
 			errmsg += "Expected 'code' (from form) or 'content' (from JSON). "
 		}
 		log.Error(c, "Error: %s Received data: %v", errmsg, data)
-		response.JSONError(c, http.StatusBadRequest, errmsg)
+		response.JSONError(c, http.StatusBadRequest, "", errmsg)
 		return
 	}
 	SMSCfg := service.GetSMSCfg(nil)
@@ -61,21 +61,21 @@ func (s *Server) SMSHandler(c *gin.Context) {
 		if err != nil {
 			errmsg := fmt.Sprintf("Error getting sms code: %v", err)
 			log.Error(c, "Error: %s received data: %v", errmsg)
-			response.JSONError(c, http.StatusBadRequest, errmsg)
+			response.JSONError(c, http.StatusBadRequest, "", errmsg)
 			return
 		}
 		token, err := service.GetJWTToken(code, SMSCfg.ClientID, s.HTTPClient)
 		if err != nil {
 			errmsg := fmt.Sprintf("Error getting sms token: %v", err)
 			log.Error(c, "Error: %s Received data: %v", errmsg)
-			response.JSONError(c, http.StatusBadRequest, errmsg)
+			response.JSONError(c, http.StatusBadRequest, "", errmsg)
 			return
 		}
 		_, err = service.SendSMS(token, phoneNumber, messageContent)
 		if err != nil {
 			errmsg := fmt.Sprintf("Error getting sms token: %v", err)
 			log.Error(c, "Error: %s Received data: %v", errmsg)
-			response.JSONError(c, http.StatusBadRequest, errmsg)
+			response.JSONError(c, http.StatusBadRequest, "", errmsg)
 			return
 		}
 	}

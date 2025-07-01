@@ -66,7 +66,7 @@ func getDecryptedData(encryptedData string, result any) error {
 func (s *Server) bindAccount(c *gin.Context) {
 	token, err := getTokenFromHeader(c)
 	if err != nil {
-		response.HandleError(c, http.StatusBadRequest, err)
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err)
 		return
 	}
 
@@ -75,12 +75,13 @@ func (s *Server) bindAccount(c *gin.Context) {
 	provider := c.DefaultQuery("provider", "casdoor")
 	providerInstance, err := oauthManager.GetProvider(provider)
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParma, err)
 		return
 	}
 
 	if s.BaseURL == "" {
-		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("base URL is not configured"))
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParma,
+			fmt.Errorf("base URL is not configured"))
 		return
 	}
 
@@ -88,7 +89,7 @@ func (s *Server) bindAccount(c *gin.Context) {
 		TokenHash: tokenHash,
 	})
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrDataEncryption, err)
 		return
 	}
 
@@ -111,23 +112,25 @@ func (s *Server) bindAccount(c *gin.Context) {
 func (s *Server) bindAccountCallback(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
 	if code == "" {
-		response.HandleError(c, http.StatusBadRequest, errs.ParmaNeedErr("code"))
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+			errs.ParmaNeedErr("code"))
 		return
 	}
 	encryptedData := c.DefaultQuery("state", "")
 	if encryptedData == "" {
-		response.HandleError(c, http.StatusBadRequest, errs.ParmaNeedErr("state"))
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+			errs.ParmaNeedErr("state"))
 		return
 	}
 	var parameterCarrier ParameterCarrier
 	if err := getDecryptedData(encryptedData, &parameterCarrier); err != nil {
-		response.HandleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrDataDecryption, err)
 		return
 	}
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider("casdoor")
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParma, err)
 		return
 	}
 	ctx, cancel := getContextWithTimeout(defaultTimeout)
@@ -136,14 +139,14 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	parameterCarrier.Provider = "casdoor"
 	userNew, err := GetUserByOauth(ctx, "plugin", code, &parameterCarrier)
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, err)
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound, err)
 		return
 	}
 	userOld, err := repository.GetDB().GetUserByDeviceConditions(ctx, map[string]any{
 		"access_token_hash": parameterCarrier.TokenHash,
 	})
 	if err != nil || userOld == nil || userNew == nil {
-		response.HandleError(c, http.StatusUnauthorized, errs.ErrQueryUserInfo)
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrUserNotFound, errs.ErrInfoQueryUserInfo)
 		return
 	}
 	var useroldToken string
@@ -163,16 +166,19 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		userNewExist, err = repository.GetDB().GetUserByField(ctx, "github_id", userNew.GithubID)
 	} else {
 		// custom types are not considered
-		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("does not support custom account binding"))
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrTokenInvalid,
+			fmt.Errorf("does not support custom account binding"))
 		return
 	}
 	resp, err := service.MergeByCasdoor(providerInstance, useroldToken, userNew.Devices[0].AccessToken, s.HTTPClient)
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("account linking failed, %w", err))
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
+			fmt.Errorf("account linking failed, %w", err))
 		return
 	}
 	if resp.Status != "ok" {
-		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("failed to merge account"))
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
+			fmt.Errorf("failed to merge account"))
 		return
 	}
 	userMarge := userOld
@@ -181,7 +187,8 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	} else {
 		// delete one of the accounts
 		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
-			response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("failed to delete old user, %w", err))
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
+				fmt.Errorf("failed to delete old user, %w", err))
 			return
 		}
 	}
@@ -197,7 +204,8 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	}
 
 	if err := repository.GetDB().Upsert(ctx, userMarge, constants.DBIndexField, userMarge.ID); err != nil {
-		response.HandleError(c, http.StatusInternalServerError, fmt.Errorf("%s: %w", errs.ErrUpdateUserInfo, err))
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
+			fmt.Errorf("%s: %w", errs.ErrInfoUpdateUserInfo, err))
 		return
 	}
 	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + parameterCarrier.TokenHash
@@ -207,7 +215,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 func (s *Server) userInfoHandler(c *gin.Context) {
 	token, err := getTokenFromHeader(c)
 	if err != nil {
-		response.HandleError(c, http.StatusBadRequest, err)
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err)
 		return
 	}
 
@@ -219,7 +227,7 @@ func (s *Server) userInfoHandler(c *gin.Context) {
 		"access_token_hash": tokenHash,
 	})
 	if err != nil || user == nil {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrInvalidToken)
+		response.HandleError(c, http.StatusBadRequest, errs.ErrTokenInvalid, errs.ErrInfoInvalidToken)
 		return
 	}
 

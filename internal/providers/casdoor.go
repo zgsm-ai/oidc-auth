@@ -297,7 +297,8 @@ func (s *CasdoorProvider) RefreshToken(ctx context.Context, refreshToken string)
 }
 
 func (s *CasdoorProvider) GetAuthURL(state, redirectURL string) string {
-	return s.config.BaseURL + constants.CasdoorAuthURI + "?client_id=" + s.config.ClientID + "&state=" + state + "&redirect_uri=" + redirectURL + "&response_type=code"
+	return s.config.BaseURL + constants.CasdoorAuthURI + "?client_id=" +
+		s.config.ClientID + "&state=" + state + "&redirect_uri=" + redirectURL + "&response_type=code"
 }
 
 func (s *CasdoorProvider) GetEndpoint(isInternal bool) string {

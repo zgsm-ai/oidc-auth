@@ -21,18 +21,19 @@ func logoutHandler(c *gin.Context) {
 	if platform == "plugin" {
 		accessToken, err := getTokenFromHeader(c)
 		if err != nil {
-			response.JSONError(c, http.StatusBadRequest, err.Error())
+			response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err.Error())
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		user, index, err := utils.GetUserByTokenHash(ctx, accessToken, "access_token_hash")
 		if err != nil {
-			response.HandleError(c, http.StatusBadRequest, fmt.Errorf("%s, %s", errs.ErrQueryUserInfo, err))
+			response.HandleError(c, http.StatusBadRequest, errs.ErrTokenInvalid,
+				fmt.Errorf("%s, %s", errs.ErrInfoQueryUserInfo, err))
 			return
 		}
 		if user == nil || index == -1 {
-			response.HandleError(c, http.StatusUnauthorized, errs.ErrInvalidToken)
+			response.HandleError(c, http.StatusUnauthorized, errs.ErrTokenInvalid, errs.ErrInfoInvalidToken)
 			return
 		}
 		user.Devices[index].Status = constants.LoginStatusLoggedOffline
@@ -43,7 +44,8 @@ func logoutHandler(c *gin.Context) {
 		user.UpdatedAt = time.Now()
 		err = repository.GetDB().Upsert(ctx, user, constants.DBIndexField, user.ID)
 		if err != nil {
-			response.HandleError(c, http.StatusBadRequest, fmt.Errorf("%s, %s", errs.ErrUpdateUserInfo, err))
+			response.HandleError(c, http.StatusBadRequest, errs.ErrUpdateInfo,
+				fmt.Errorf("%s, %s", errs.ErrInfoUpdateUserInfo, err))
 			return
 		}
 	}
@@ -58,19 +60,22 @@ func logoutHandler(c *gin.Context) {
 func statusHandler(c *gin.Context) {
 	platform := c.DefaultQuery("platform", "")
 	if platform != "plugin" {
-		response.JSONError(c, http.StatusBadRequest, "device must be vscode plugin")
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+			"device must be vscode plugin")
 		return
 	}
 	accessToken, err := getTokenFromHeader(c)
 	if err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ParmaNeedErr("access_token").Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+			errs.ParmaNeedErr("access_token").Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	user, index, err := utils.GetUserByTokenHash(ctx, accessToken, "access_token_hash")
 	if user == nil || index == -1 {
-		response.HandleError(c, http.StatusUnauthorized, errs.ErrInvalidToken)
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrTokenInvalid,
+			errs.ErrInfoInvalidToken)
 		return
 	}
 	status := user.Devices[index].Status

@@ -21,9 +21,10 @@ func JSONSuccess(c *gin.Context, message, data any) {
 }
 
 // JSONError returns error response (basic version)
-func JSONError(c *gin.Context, httpCode int, message string) {
+func JSONError(c *gin.Context, httpCode int, codeMsg, message string) {
+
 	c.JSON(httpCode, gin.H{
-		"code":      "",
+		"code":      codeMsg,
 		"success":   false,
 		"message":   message,
 		"timestamp": time.Now(),
@@ -31,7 +32,7 @@ func JSONError(c *gin.Context, httpCode int, message string) {
 	})
 }
 
-func HandleError(c *gin.Context, status int, err error) {
+func HandleError(c *gin.Context, status int, codeMsg string, err error) {
 	log.Error(nil, "operation failed: %v", err)
-	JSONError(c, status, err.Error())
+	JSONError(c, status, codeMsg, err.Error())
 }

@@ -21,23 +21,30 @@ import (
 func tokenHandler(c *gin.Context) {
 	var query requestQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
-		response.JSONError(c, http.StatusBadRequest, err.Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err.Error())
 		return
 	}
 	if query.MachineCode != "" && query.VscodeVersion == "" {
-		response.JSONError(c, http.StatusBadRequest, errs.ParmaNeedErr("machine_code or vscode_version").Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+			errs.ParmaNeedErr("machine_code or vscode_version").Error())
+		return
+	}
+	if query.State == "" {
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+			errs.ParmaNeedErr("state").Error())
 		return
 	}
 	// if MachineCode is provided, get the token for the first time
 	// the account should have been pre-registered.
 	if query.MachineCode != "" {
-		tokenPair, code, err := firstGetToken(query.MachineCode, query.VscodeVersion)
+		tokenPair, code, err := firstGetToken(query.MachineCode, query.VscodeVersion, query.State)
 		if err != nil {
-			response.JSONError(c, code, err.Error())
+			response.JSONError(c, code, errs.ErrTokenGenerate, err.Error())
 			return
 		}
 		if tokenPair == nil {
-			response.JSONError(c, http.StatusInternalServerError, errs.ErrGenerateToken.Error())
+			response.JSONError(c, http.StatusInternalServerError, errs.ErrTokenGenerate,
+				errs.ErrInfoGenerateToken.Error())
 			return
 		}
 		response.JSONSuccess(c, "", gin.H{
@@ -49,16 +56,17 @@ func tokenHandler(c *gin.Context) {
 	}
 	refreshToken, err := getTokenFromHeader(c)
 	if err != nil {
-		response.JSONError(c, http.StatusUnauthorized, err.Error())
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrAuthentication, err.Error())
 		return
 	}
 	tokenPair, code, err := tokenRefresh(refreshToken)
 	if err != nil {
-		response.JSONError(c, code, err.Error())
+		response.JSONError(c, code, errs.ErrTokenInvalid, err.Error())
 		return
 	}
 	if tokenPair == nil {
-		response.JSONError(c, http.StatusInternalServerError, errs.ErrGenerateToken.Error())
+		response.JSONError(c, http.StatusInternalServerError, errs.ErrTokenGenerate,
+			errs.ErrInfoGenerateToken.Error())
 		return
 	}
 	response.JSONSuccess(c, "", gin.H{
@@ -68,7 +76,7 @@ func tokenHandler(c *gin.Context) {
 	})
 }
 
-func firstGetToken(machineCode, vscodeVersion string) (*utils.TokenPair, int, error) {
+func firstGetToken(machineCode, vscodeVersion, state string) (*utils.TokenPair, int, error) {
 	if vscodeVersion == "" {
 		return nil, http.StatusUnauthorized, errs.ParmaNeedErr("vscode_version")
 	}
@@ -78,18 +86,19 @@ func firstGetToken(machineCode, vscodeVersion string) (*utils.TokenPair, int, er
 	user, err := db.GetUserByDeviceConditions(ctx, map[string]any{
 		"machine_code":   machineCode,
 		"vscode_version": vscodeVersion,
+		"state":          state,
 		"status":         constants.LoginStatusLoggedOut,
 	})
 	if err != nil {
-		return nil, http.StatusUnauthorized, errs.ErrQueryUserInfo
+		return nil, http.StatusUnauthorized, errs.ErrInfoQueryUserInfo
 	}
 	if user == nil {
-		return nil, http.StatusUnauthorized, errs.ErrInvalidToken
+		return nil, http.StatusUnauthorized, errs.ErrInfoInvalidToken
 	}
 
 	index := findDeviceIndex(user, machineCode, vscodeVersion)
 	if index == -1 {
-		return nil, http.StatusUnauthorized, errs.ErrInvalidToken
+		return nil, http.StatusUnauthorized, errs.ErrInfoInvalidToken
 	}
 
 	tokenPair, err := generateTokenPair(ctx, user, index)
@@ -117,7 +126,7 @@ func tokenRefresh(refreshToken string) (*utils.TokenPair, int, error) {
 		return nil, http.StatusUnauthorized, err
 	}
 	if user == nil {
-		return nil, http.StatusUnauthorized, errs.ErrInvalidToken
+		return nil, http.StatusUnauthorized, errs.ErrInfoInvalidToken
 	}
 
 	tokenPair, err := generateTokenPair(ctx, user, index)
@@ -142,7 +151,7 @@ func generateTokenPair(ctx context.Context, user *repository.AuthUser, index int
 
 	tokenPair, err := utils.GenerateTokenPairByUser(user, index)
 	if err != nil || tokenPair == nil {
-		return nil, fmt.Errorf("%s, %v", errs.ErrGenerateToken, err)
+		return nil, fmt.Errorf("%s, %v", errs.ErrInfoGenerateToken, err)
 	}
 	return tokenPair, nil
 }
@@ -179,14 +188,16 @@ func updateUserInfoMid(user *repository.AuthUser, index int, tokenPair *utils.To
 func getTokenByHash(c *gin.Context) {
 	accessTokenHash, err := getTokenFromHeader(c)
 	if err != nil {
-		response.JSONError(c, http.StatusUnauthorized, errs.ParmaNeedErr("token").Error())
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrBadRequestParma,
+			errs.ParmaNeedErr("token").Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	tokenPair, err := utils.GetTokenByTokenHash(ctx, accessTokenHash)
 	if err != nil {
-		response.JSONError(c, http.StatusUnauthorized, fmt.Sprintf("%s, %s", errs.ErrQueryUserInfo, err.Error()))
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrUserNotFound,
+			fmt.Sprintf("%s, %s", errs.ErrInfoQueryUserInfo, err.Error()))
 		return
 	}
 	response.JSONSuccess(c, "", gin.H{
