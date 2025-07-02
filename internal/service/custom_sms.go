@@ -142,7 +142,7 @@ func GetJWTToken(loginCode, clientID string, httpClient *http.Client) (string, e
 	return accessToken, nil
 }
 
-func SendSMS(token, phone, content string) (*SMSResponse, error) {
+func SendSMS(client *http.Client, token, phone, content string) (*SMSResponse, error) {
 	sendURL := GetSMSCfg(nil).SendURL
 
 	if strings.HasPrefix(phone, "+86") {
@@ -167,10 +167,6 @@ func SendSMS(token, phone, content string) (*SMSResponse, error) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "OIDC-Auth-Client/1.0")
-
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
 
 	resp, err := client.Do(req)
 	if err != nil {

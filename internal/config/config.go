@@ -3,12 +3,13 @@ package config
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/spf13/viper"
+
+	"github.com/zgsm-ai/oidc-auth/pkg/log"
 )
 
 type AppConfig struct {
@@ -121,16 +122,16 @@ func InitConfig(cfgFile string) (*AppConfig, error) {
 	if err := viper.ReadInConfig(); err != nil {
 		var configFileNotFoundError viper.ConfigFileNotFoundError
 		if errors.As(err, &configFileNotFoundError) {
-			log.Println("Config file not found, using defaults and environment variables.")
+			log.Info(nil, "Config file not found, using defaults and environment variables.")
 		}
 	} else {
-		log.Printf("Configuration loaded from: %s", viper.ConfigFileUsed())
+		log.Info(nil, "Configuration loaded from: %s", viper.ConfigFileUsed())
 	}
 
 	if err := viper.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	log.Println("Configuration initialized and validated successfully.")
+	log.Info(nil, "Configuration initialized and validated successfully.")
 	return cfg, nil
 }

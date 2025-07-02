@@ -10,6 +10,8 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/zgsm-ai/oidc-auth/pkg/log"
 )
 
 var allowedFields = map[string]map[string]bool{
@@ -69,7 +71,7 @@ func (d *Database) withTransaction(ctx context.Context, fn func(*gorm.DB) error)
 	defer func() {
 		if r := recover(); r != nil {
 			if rbErr := tx.Rollback().Error; rbErr != nil {
-				fmt.Printf("failed to rollback transaction after panic: %v\n", rbErr)
+				log.Info(nil, "failed to rollback transaction after panic: %v\n", rbErr)
 			}
 			panic(r)
 		}
