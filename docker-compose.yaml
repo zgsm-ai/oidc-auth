@@ -22,7 +22,7 @@ services:
       DATABASE_HOST: "${DB_HOST}"
       DATABASE_DBNAME: "${OIDC_DB_NAME}"
       DATABASE_PASSWORD: "${DB_PASSWORD}"
-      DATABASE_PORT: 5433
+      DATABASE_PORT: 5432
       DATABASE_USERNAME: "${DB_USER}"
       ENCRYPT_AESKEY: "${AES_KEY}"
     depends_on:
@@ -41,11 +41,10 @@ services:
       POSTGRES_USER: "${DB_USER}"
       POSTGRES_DB: "${DB_NAME}"
       POSTGRES_PASSWORD: "${DB_PASSWORD}"
-      POSTGRES_MULTIPLE_DATABASES: "casdoor"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5432:5432"
     shm_size: 128mb
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
@@ -61,10 +60,9 @@ services:
     container_name: casdoor
     ports:
       - "8000:8000"
-    entrypoint: /bin/sh -c './server --createDatabase=true'
     environment:
       driverName: postgres
-      dataSourceName: "host=${DB_HOST} port=5433 user=${DB_USER} password=${DB_PASSWORD} dbname=${CASDOOR_DB_NAME} sslmode=disable"
+      dataSourceName: "host=${DB_HOST} port=5432 user=${DB_USER} password=${DB_PASSWORD} dbname=${CASDOOR_DB_NAME} sslmode=disable"
     depends_on:
       postgres:
         condition: service_healthy

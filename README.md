@@ -66,6 +66,7 @@ docker run -d \
   -e PROVIDERS_CASDOOR_CLIENTID="<casdoor_client_id>" \
   -e PROVIDERS_CASDOOR_CLIENTSECRET="<casdoor_client_secret>" \
   -e PROVIDERS_CASDOOR_BASEURL="<casdoor_base_url>" \
+  -e PROVIDERS_CASDOOR_INTERNALURL="<casdoor_base_url>" \
   -e SMS_ENABLEDTEST="false" \
   -e SYNCSTAR_ENABLED="false" \
   -e DATABASE_HOST="<database_host>" \
