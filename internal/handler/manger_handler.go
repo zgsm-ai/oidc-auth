@@ -149,6 +149,11 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		response.HandleError(c, http.StatusUnauthorized, errs.ErrUserNotFound, errs.ErrInfoQueryUserInfo)
 		return
 	}
+	// The already bound one cannot be bound again
+	if userOld.GithubID != "" && userNew.Phone != "" {
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrUserNotFound, errs.ErrInfoQueryUserInfo)
+		return
+	}
 	var useroldToken string
 	for _, device := range userOld.Devices {
 		if device.AccessTokenHash == parameterCarrier.TokenHash {
