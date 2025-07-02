@@ -150,7 +150,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		return
 	}
 	// The already bound one cannot be bound again
-	if userOld.GithubID != "" && userNew.Phone != "" {
+	if userOld.GithubID != "" && userOld.Phone != "" {
 		response.HandleError(c, http.StatusUnauthorized, errs.ErrUserNotFound, errs.ErrInfoQueryUserInfo)
 		return
 	}
