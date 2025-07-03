@@ -143,7 +143,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	}
 	// The already bound one cannot be bound again
 	if userOld.GithubID != "" && userOld.Phone != "" {
-		response.HandleError(c, http.StatusUnauthorized, errs.ErrUserNotFound, errs.ErrInfoQueryUserInfo)
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
 		return
 	}
 	var useroldToken string
@@ -167,6 +167,21 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 			fmt.Errorf("does not support custom account binding"))
 		return
 	}
+	userMarge := userOld
+	if userNewExist == nil {
+		userNewExist = userNew
+	} else {
+		if userNewExist.GithubID != "" && userNewExist.Phone != "" {
+			response.HandleError(c, http.StatusUnauthorized, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
+			return
+		}
+		// delete one of the accounts
+		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
+				fmt.Errorf("failed to delete old user, %w", err))
+			return
+		}
+	}
 	resp, err := service.MergeByCasdoor(providerInstance, useroldToken, userNew.Devices[0].AccessToken, s.HTTPClient)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
@@ -177,17 +192,6 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
 			fmt.Errorf("failed to merge account"))
 		return
-	}
-	userMarge := userOld
-	if userNewExist == nil {
-		userNewExist = userNew
-	} else {
-		// delete one of the accounts
-		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
-			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
-				fmt.Errorf("failed to delete old user, %w", err))
-			return
-		}
 	}
 	userMarge.Email = coalesceString(userOld.Email, userNew.Email)
 	userMarge.Phone = coalesceString(userOld.Phone, userNew.Phone)
