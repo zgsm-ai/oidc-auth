@@ -66,6 +66,7 @@ docker run -d \
   -e PROVIDERS_CASDOOR_CLIENTID="<casdoor_client_id>" \
   -e PROVIDERS_CASDOOR_CLIENTSECRET="<casdoor_client_secret>" \
   -e PROVIDERS_CASDOOR_BASEURL="<casdoor_base_url>" \
+  -e PROVIDERS_CASDOOR_INTERNALURL="<casdoor_base_url>" \
   -e SMS_ENABLEDTEST="false" \
   -e SYNCSTAR_ENABLED="false" \
   -e DATABASE_HOST="<database_host>" \
@@ -80,42 +81,43 @@ docker run -d \
 
 Complete environment variable configuration for containerized deployment:
 
-| Category | Environment Variable | Description | Default Value |
-|----------|---------------------|-------------|---------------|
-| **Server Configuration** | `SERVER_SERVERPORT` | Service port | `8080` |
-| | `SERVER_BASEURL` | Service base URL | `http://localhost:8080` |
-| | `SERVER_ISPRIVATE` | Private network mode | `false` |
+| Category                    | Environment Variable | Description | Default Value |
+|-----------------------------|---------------------|-------------|---------------|
+| **Server Configuration**    | `SERVER_SERVERPORT` | Service port | `8080` |
+|                             | `SERVER_BASEURL` | Service base URL | `http://localhost:8080` |
+|                             | `SERVER_ISPRIVATE` | Private network mode | `false` |
 | **Authentication Provider** | `PROVIDERS_CASDOOR_CLIENTID` | Casdoor client ID | - |
-| | `PROVIDERS_CASDOOR_CLIENTSECRET` | Casdoor client secret | - |
-| | `PROVIDERS_CASDOOR_BASEURL` | Casdoor service address | - |
-| **Database Configuration** | `DATABASE_TYPE` | Database type | `postgres` |
-| | `DATABASE_HOST` | Database host | `localhost` |
-| | `DATABASE_PORT` | Database port | `5432` |
-| | `DATABASE_USERNAME` | Database username | `postgres` |
-| | `DATABASE_PASSWORD` | Database password | - |
-| | `DATABASE_DBNAME` | Database name | `auth` |
-| | `DATABASE_MAXIDLECONNS` | Max idle connections | `50` |
-| | `DATABASE_MAXOPENCONNS` | Max open connections | `300` |
-| **SMS Service** | `SMS_ENABLEDTEST` | Test mode | `true` |
-| | `SMS_CLIENTID` | SMS client ID | - |
-| | `SMS_CLIENTSECRET` | SMS client secret | - |
-| | `SMS_TOKENURL` | Token endpoint | - |
-| | `SMS_SENDURL` | SMS send endpoint | - |
-| **GitHub Sync** | `SYNCSTAR_ENABLED` | Enable Star sync | `true` |
-| | `SYNCSTAR_PERSONALTOKEN` | GitHub Personal Token | - |
-| | `SYNCSTAR_OWNER` | Repository owner | `zgsm-ai` |
-| | `SYNCSTAR_REPO` | Repository name | `zgsm` |
-| | `SYNCSTAR_INTERVAL` | Sync interval (minutes) | `1` |
-| **Encryption** | `ENCRYPT_AESKEY` | AES key (32 characters) | - |
-| | `ENCRYPT_ENABLERSA` | Enable RSA | `false` |
-| | `ENCRYPT_PRIVATEKEY` | RSA private key file path | `config/private.pem` |
-| | `ENCRYPT_PUBLICKEY` | RSA public key file path | `config/public.pem` |
-| **Logging** | `LOG_LEVEL` | Log level | `info` |
-| | `LOG_FILENAME` | Log file path | `logs/app.log` |
-| | `LOG_MAXSIZE` | Log file size limit (MB) | `100` |
-| | `LOG_MAXBACKUPS` | Number of backup files | `10` |
-| | `LOG_MAXAGE` | Log retention days | `30` |
-| | `LOG_COMPRESS` | Compress old logs | `true` |
+|                             | `PROVIDERS_CASDOOR_CLIENTSECRET` | Casdoor client secret | - |
+|                             | `PROVIDERS_CASDOOR_BASEURL` | Casdoor service address | - |
+|                             | `PROVIDERS_CASDOOR_INTERNALURL` | Casdoor service internal address |-|
+| **Database Configuration**  | `DATABASE_TYPE` | Database type | `postgres` |
+|                             | `DATABASE_HOST` | Database host | `localhost` |
+|                             | `DATABASE_PORT` | Database port | `5432` |
+|                             | `DATABASE_USERNAME` | Database username | `postgres` |
+|                             | `DATABASE_PASSWORD` | Database password | - |
+|                             | `DATABASE_DBNAME` | Database name | `auth` |
+|                             | `DATABASE_MAXIDLECONNS` | Max idle connections | `50` |
+|                             | `DATABASE_MAXOPENCONNS` | Max open connections | `300` |
+| **SMS Service**             | `SMS_ENABLEDTEST` | Test mode | `true` |
+|                             | `SMS_CLIENTID` | SMS client ID | - |
+|                             | `SMS_CLIENTSECRET` | SMS client secret | - |
+|                             | `SMS_TOKENURL` | Token endpoint | - |
+|                             | `SMS_SENDURL` | SMS send endpoint | - |
+| **GitHub Sync**             | `SYNCSTAR_ENABLED` | Enable Star sync | `true` |
+|                             | `SYNCSTAR_PERSONALTOKEN` | GitHub Personal Token | - |
+|                             | `SYNCSTAR_OWNER` | Repository owner | `zgsm-ai` |
+|                             | `SYNCSTAR_REPO` | Repository name | `zgsm` |
+|                             | `SYNCSTAR_INTERVAL` | Sync interval (minutes) | `1` |
+| **Encryption**              | `ENCRYPT_AESKEY` | AES key (32 characters) | - |
+|                             | `ENCRYPT_ENABLERSA` | Enable RSA | `false` |
+|                             | `ENCRYPT_PRIVATEKEY` | RSA private key file path | `config/private.pem` |
+|                             | `ENCRYPT_PUBLICKEY` | RSA public key file path | `config/public.pem` |
+| **Logging**                 | `LOG_LEVEL` | Log level | `info` |
+|                             | `LOG_FILENAME` | Log file path | `logs/app.log` |
+|                             | `LOG_MAXSIZE` | Log file size limit (MB) | `100` |
+|                             | `LOG_MAXBACKUPS` | Number of backup files | `10` |
+|                             | `LOG_MAXAGE` | Log retention days | `30` |
+|                             | `LOG_COMPRESS` | Compress old logs | `true` |
 
 ## Kubernetes Deployment
 

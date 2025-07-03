@@ -23,14 +23,6 @@ const (
 	shortTimeout   = 10 * time.Second
 )
 
-var (
-	serverConfig Server
-)
-
-func SetServerConfig(config Server) {
-	serverConfig = config
-}
-
 func getContextWithTimeout(timeout time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), timeout)
 }
@@ -66,7 +58,7 @@ func getDecryptedData(encryptedData string, result any) error {
 func (s *Server) bindAccount(c *gin.Context) {
 	token, err := getTokenFromHeader(c)
 	if err != nil {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err)
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err)
 		return
 	}
 
@@ -75,12 +67,12 @@ func (s *Server) bindAccount(c *gin.Context) {
 	provider := c.DefaultQuery("provider", "casdoor")
 	providerInstance, err := oauthManager.GetProvider(provider)
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParma, err)
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
 		return
 	}
 
 	if s.BaseURL == "" {
-		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParma,
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam,
 			fmt.Errorf("base URL is not configured"))
 		return
 	}
@@ -112,14 +104,14 @@ func (s *Server) bindAccount(c *gin.Context) {
 func (s *Server) bindAccountCallback(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
 	if code == "" {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
-			errs.ParmaNeedErr("code"))
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("code"))
 		return
 	}
 	encryptedData := c.DefaultQuery("state", "")
 	if encryptedData == "" {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
-			errs.ParmaNeedErr("state"))
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("state"))
 		return
 	}
 	var parameterCarrier ParameterCarrier
@@ -130,7 +122,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider("casdoor")
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParma, err)
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
 		return
 	}
 	ctx, cancel := getContextWithTimeout(defaultTimeout)
@@ -147,6 +139,11 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	})
 	if err != nil || userOld == nil || userNew == nil {
 		response.HandleError(c, http.StatusUnauthorized, errs.ErrUserNotFound, errs.ErrInfoQueryUserInfo)
+		return
+	}
+	// The already bound one cannot be bound again
+	if userOld.GithubID != "" && userOld.Phone != "" {
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
 		return
 	}
 	var useroldToken string
@@ -170,6 +167,21 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 			fmt.Errorf("does not support custom account binding"))
 		return
 	}
+	userMarge := userOld
+	if userNewExist == nil {
+		userNewExist = userNew
+	} else {
+		if userNewExist.GithubID != "" && userNewExist.Phone != "" {
+			response.HandleError(c, http.StatusUnauthorized, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
+			return
+		}
+		// delete one of the accounts
+		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
+				fmt.Errorf("failed to delete old user, %w", err))
+			return
+		}
+	}
 	resp, err := service.MergeByCasdoor(providerInstance, useroldToken, userNew.Devices[0].AccessToken, s.HTTPClient)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
@@ -180,17 +192,6 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
 			fmt.Errorf("failed to merge account"))
 		return
-	}
-	userMarge := userOld
-	if userNewExist == nil {
-		userNewExist = userNew
-	} else {
-		// delete one of the accounts
-		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
-			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
-				fmt.Errorf("failed to delete old user, %w", err))
-			return
-		}
 	}
 	userMarge.Email = coalesceString(userOld.Email, userNew.Email)
 	userMarge.Phone = coalesceString(userOld.Phone, userNew.Phone)
@@ -215,7 +216,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 func (s *Server) userInfoHandler(c *gin.Context) {
 	token, err := getTokenFromHeader(c)
 	if err != nil {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err)
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err)
 		return
 	}
 

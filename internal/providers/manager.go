@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"errors"
 	"sync"
 )
 
@@ -17,9 +18,13 @@ func GetManager() *OAuthManager {
 	return managerInstance
 }
 
-func InitializeProviders(configs map[string]*ProviderConfig) {
+func InitializeProviders(configs map[string]*ProviderConfig) error {
 	manager := GetManager()
+	if manager == nil {
+		return errors.New("GetManager failed")
+	}
 	for name, config := range configs {
 		manager.SetConfig(name, config)
 	}
+	return nil
 }

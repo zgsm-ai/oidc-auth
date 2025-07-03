@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"fmt"
-	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"github.com/zgsm-ai/oidc-auth/internal/providers"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
+	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 	"github.com/zgsm-ai/oidc-auth/pkg/response"
 	"github.com/zgsm-ai/oidc-auth/pkg/utils"
 )
@@ -21,17 +21,17 @@ import (
 func tokenHandler(c *gin.Context) {
 	var query requestQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err.Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err.Error())
 		return
 	}
 	if query.MachineCode != "" && query.VscodeVersion == "" {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
-			errs.ParmaNeedErr("machine_code or vscode_version").Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("machine_code or vscode_version").Error())
 		return
 	}
 	if query.State == "" {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
-			errs.ParmaNeedErr("state").Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("state").Error())
 		return
 	}
 	// if MachineCode is provided, get the token for the first time
@@ -78,7 +78,7 @@ func tokenHandler(c *gin.Context) {
 
 func firstGetToken(machineCode, vscodeVersion, state string) (*utils.TokenPair, int, error) {
 	if vscodeVersion == "" {
-		return nil, http.StatusUnauthorized, errs.ParmaNeedErr("vscode_version")
+		return nil, http.StatusUnauthorized, errs.ParamNeedErr("vscode_version")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -104,6 +104,9 @@ func firstGetToken(machineCode, vscodeVersion, state string) (*utils.TokenPair, 
 	tokenPair, err := generateTokenPair(ctx, user, index)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
+	}
+	if tokenPair == nil {
+		return nil, http.StatusInternalServerError, errs.ErrInfoGenerateToken
 	}
 
 	user.Devices[index].Status = constants.LoginStatusLoggedIn
@@ -157,6 +160,9 @@ func generateTokenPair(ctx context.Context, user *repository.AuthUser, index int
 }
 
 func findDeviceIndex(user *repository.AuthUser, machineCode, vscodeVersion string) int {
+	if user == nil {
+		return -1
+	}
 	for i, device := range user.Devices {
 		if device.MachineCode == machineCode && device.VSCodeVersion == vscodeVersion {
 			user.Devices[i].UpdatedAt = time.Now()
@@ -167,6 +173,9 @@ func findDeviceIndex(user *repository.AuthUser, machineCode, vscodeVersion strin
 }
 
 func updateUserAndSave(ctx context.Context, user *repository.AuthUser, index int, tokenPair *utils.TokenPair) error {
+	if user == nil || len(user.Devices) <= index {
+		return errs.ErrInfoUpdateUserInfo
+	}
 	updateUserInfoMid(user, index, tokenPair)
 	return repository.GetDB().Upsert(ctx, user, constants.DBIndexField, user.ID)
 }
@@ -188,8 +197,8 @@ func updateUserInfoMid(user *repository.AuthUser, index int, tokenPair *utils.To
 func getTokenByHash(c *gin.Context) {
 	accessTokenHash, err := getTokenFromHeader(c)
 	if err != nil {
-		response.JSONError(c, http.StatusUnauthorized, errs.ErrBadRequestParma,
-			errs.ParmaNeedErr("token").Error())
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("token").Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -209,7 +218,7 @@ func getTokenByHash(c *gin.Context) {
 func getTokenFromHeader(c *gin.Context) (string, error) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		return "", errs.ParmaNeedErr("Authorization")
+		return "", errs.ParamNeedErr("Authorization")
 	}
 
 	parts := strings.SplitN(authHeader, " ", 2)
@@ -217,7 +226,7 @@ func getTokenFromHeader(c *gin.Context) (string, error) {
 		return parts[0], nil
 	}
 	if !(len(parts) == 2 && parts[0] == "Bearer") {
-		return "", errs.ParmaNeedErr("Bearer")
+		return "", errs.ParamNeedErr("Bearer")
 	}
 
 	tokenString := parts[1]
@@ -225,6 +234,12 @@ func getTokenFromHeader(c *gin.Context) (string, error) {
 }
 
 func GenerateTokenPairByCustom(ctx context.Context, user *repository.AuthUser, index int) (*utils.TokenPair, error) {
+	if user == nil {
+		return nil, fmt.Errorf("parameter user is nil")
+	}
+	if len(user.Devices) <= index {
+		return nil, fmt.Errorf("device not found")
+	}
 	refreshToken := user.Devices[index].RefreshToken
 	provider := user.Devices[index].Provider
 	oauthManager := providers.GetManager()

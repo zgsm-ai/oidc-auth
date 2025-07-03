@@ -10,7 +10,7 @@ var (
 )
 
 const (
-	ErrBadRequestParma = "oidc-auth.badRequestParameter"
+	ErrBadRequestParam = "oidc-auth.badRequestParameter"
 	ErrDataEncryption  = "oidc-auth.loginEncryptFailed"
 	ErrDataDecryption  = "oidc-auth.LoginDecryptFailed"
 	ErrUserNotFound    = "oidc-auth.userNotFound"
@@ -21,6 +21,6 @@ const (
 	ErrAuthentication  = "oidc-auth.authenticationFailed"
 )
 
-func ParmaNeedErr(name string) error {
+func ParamNeedErr(name string) error {
 	return errors.New(name + " needs to be provided")
 }

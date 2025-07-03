@@ -17,7 +17,6 @@ const (
 // https://stackoverflow.com/questions/25265465/why-github-api-gives-me-a-lower-number-stars-of-a-repo
 const (
 	GitHubStarBaseURL = "https://api.github.com/repos"
-	GithubUserAPIURL  = "https://api.github.com/user"
 	DefaultPageSize   = 100 // The maximum value cannot exceed 100
 	MaxPageLimit      = 400 // Maximum number of pages to fetch
 )

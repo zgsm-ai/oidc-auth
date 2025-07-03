@@ -71,13 +71,14 @@ func (s *Server) SMSHandler(c *gin.Context) {
 			response.JSONError(c, http.StatusBadRequest, "", errmsg)
 			return
 		}
-		_, err = service.SendSMS(token, phoneNumber, messageContent)
+		_, err = service.SendSMS(s.HTTPClient, token, phoneNumber, messageContent)
 		if err != nil {
 			errmsg := fmt.Sprintf("Error getting sms token: %v", err)
 			log.Error(c, "Error: %s Received data: %v", errmsg)
 			response.JSONError(c, http.StatusBadRequest, "", errmsg)
 			return
 		}
+		log.Info(c, "simulating SMS sent to %s with content: %s", phoneNumber, messageContent)
 	}
 	c.JSON(http.StatusOK, ResponseBody{Status: "ok", Msg: "simulated SMS sent successfully"})
 }

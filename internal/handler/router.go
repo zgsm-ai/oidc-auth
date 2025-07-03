@@ -27,7 +27,6 @@ type ParameterCarrier struct {
 }
 
 func (s *Server) SetupRouter(r *gin.Engine) {
-	SetServerConfig(*s)
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.RequestLogger())
 

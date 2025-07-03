@@ -65,6 +65,7 @@ docker run -d \
   -e PROVIDERS_CASDOOR_CLIENTID="<casdoor_client_id>" \
   -e PROVIDERS_CASDOOR_CLIENTSECRET="<casdoor_client_secret>" \
   -e PROVIDERS_CASDOOR_BASEURL="<casdoor_base_url>" \
+  -e PROVIDERS_CASDOOR_INTERNALURL="<casdoor_base_url>" \
   -e SMS_ENABLEDTEST="false" \
   -e SYNCSTAR_ENABLED="false" \
   -e DATABASE_HOST="<database_host>" \
@@ -79,42 +80,43 @@ docker run -d \
 
 支持完整的环境变量配置，便于容器化部署：
 
-| 配置分类              | 环境变量 | 描述 | 默认值 |
-|-------------------|---------|------|--------|
-| **服务器配置**         | `SERVER_SERVERPORT` | 服务端口 | `8080` |
-|                   | `SERVER_BASEURL` | 服务基础URL | `http://localhost:8080` |
-|                   | `SERVER_ISPRIVATE` | 内网模式 | `false` |
-| **认证提供商**         | `PROVIDERS_CASDOOR_CLIENTID` | Casdoor 客户端ID | - |
-|                   | `PROVIDERS_CASDOOR_CLIENTSECRET` | Casdoor 客户端密钥 | - |
-|                   | `PROVIDERS_CASDOOR_BASEURL` | Casdoor 服务地址 | - |
-| **数据库配置**         | `DATABASE_TYPE` | 数据库类型 | `postgres` |
-|                   | `DATABASE_HOST` | 数据库主机 | `localhost` |
-|                   | `DATABASE_PORT` | 数据库端口 | `5432` |
-|                   | `DATABASE_USERNAME` | 数据库用户名 | `postgres` |
-|                   | `DATABASE_PASSWORD` | 数据库密码 | - |
-|                   | `DATABASE_DBNAME` | 数据库名 | `auth` |
-|                   | `DATABASE_MAXIDLECONNS` | 最大空闲连接 | `50` |
-|                   | `DATABASE_MAXOPENCONNS` | 最大连接数 | `300` |
-| **短信服务**          | `SMS_ENABLEDTEST` | 测试模式 | `true` |
-|                   | `SMS_CLIENTID` | 短信客户端ID | - |
-|                   | `SMS_CLIENTSECRET` | 短信客户端密钥 | - |
-|                   | `SMS_TOKENURL` | Token 获取地址 | - |
-|                   | `SMS_SENDURL` | 短信发送地址 | - |
-| **GitHub star同步** | `SYNCSTAR_ENABLED` | 启用 Star 同步 | `true` |
+| 配置分类              | 环境变量 | 描述                    | 默认值 |
+|-------------------|---------|-----------------------|--------|
+| **服务器配置**         | `SERVER_SERVERPORT` | 服务端口                  | `8080` |
+|                   | `SERVER_BASEURL` | 服务基础URL               | `http://localhost:8080` |
+|                   | `SERVER_ISPRIVATE` | 内网模式                  | `false` |
+| **认证提供商**         | `PROVIDERS_CASDOOR_CLIENTID` | Casdoor 客户端ID         | - |
+|                   | `PROVIDERS_CASDOOR_CLIENTSECRET` | Casdoor 客户端密钥         | - |
+|                   | `PROVIDERS_CASDOOR_BASEURL` | Casdoor 服务地址          | - |
+|                   | `PROVIDERS_CASDOOR_INTERNALURL` | Casdoor 服务内部地址        |-|
+| **数据库配置**         | `DATABASE_TYPE` | 数据库类型                 | `postgres` |
+|                   | `DATABASE_HOST` | 数据库主机                 | `localhost` |
+|                   | `DATABASE_PORT` | 数据库端口                 | `5432` |
+|                   | `DATABASE_USERNAME` | 数据库用户名                | `postgres` |
+|                   | `DATABASE_PASSWORD` | 数据库密码                 | - |
+|                   | `DATABASE_DBNAME` | 数据库名                  | `auth` |
+|                   | `DATABASE_MAXIDLECONNS` | 最大空闲连接                | `50` |
+|                   | `DATABASE_MAXOPENCONNS` | 最大连接数                 | `300` |
+| **短信服务**          | `SMS_ENABLEDTEST` | 测试模式                  | `true` |
+|                   | `SMS_CLIENTID` | 短信客户端ID               | - |
+|                   | `SMS_CLIENTSECRET` | 短信客户端密钥               | - |
+|                   | `SMS_TOKENURL` | Token 获取地址            | - |
+|                   | `SMS_SENDURL` | 短信发送地址                | - |
+| **GitHub star同步** | `SYNCSTAR_ENABLED` | 启用 Star 同步            | `true` |
 |                   | `SYNCSTAR_PERSONALTOKEN` | GitHub Personal Token | - |
-|                   | `SYNCSTAR_OWNER` | 仓库所有者 | `zgsm-ai` |
-|                   | `SYNCSTAR_REPO` | 仓库名称 | `zgsm` |
-|                   | `SYNCSTAR_INTERVAL` | 同步间隔(分钟) | `1` |
-| **加密配置**          | `ENCRYPT_AESKEY` | AES 密钥(32位) | - |
-|                   | `ENCRYPT_ENABLERSA` | 启用 RSA | `false` |
-|                   | `ENCRYPT_PRIVATEKEY` | RSA 私钥文件路径 | `config/private.pem` |
-|                   | `ENCRYPT_PUBLICKEY` | RSA 公钥文件路径 | `config/public.pem` |
-| **日志配置**          | `LOG_LEVEL` | 日志级别 | `info` |
-|                   | `LOG_FILENAME` | 日志文件路径 | `logs/app.log` |
-|                   | `LOG_MAXSIZE` | 日志文件大小限制(MB) | `100` |
-|                   | `LOG_MAXBACKUPS` | 备份文件数量 | `10` |
-|                   | `LOG_MAXAGE` | 日志保留天数 | `30` |
-|                   | `LOG_COMPRESS` | 压缩旧日志 | `true` |
+|                   | `SYNCSTAR_OWNER` | 仓库所有者                 | `zgsm-ai` |
+|                   | `SYNCSTAR_REPO` | 仓库名称                  | `zgsm` |
+|                   | `SYNCSTAR_INTERVAL` | 同步间隔(分钟)              | `1` |
+| **加密配置**          | `ENCRYPT_AESKEY` | AES 密钥(32位)           | - |
+|                   | `ENCRYPT_ENABLERSA` | 启用 RSA                | `false` |
+|                   | `ENCRYPT_PRIVATEKEY` | RSA 私钥文件路径            | `config/private.pem` |
+|                   | `ENCRYPT_PUBLICKEY` | RSA 公钥文件路径            | `config/public.pem` |
+| **日志配置**          | `LOG_LEVEL` | 日志级别                  | `info` |
+|                   | `LOG_FILENAME` | 日志文件路径                | `logs/app.log` |
+|                   | `LOG_MAXSIZE` | 日志文件大小限制(MB)          | `100` |
+|                   | `LOG_MAXBACKUPS` | 备份文件数量                | `10` |
+|                   | `LOG_MAXAGE` | 日志保留天数                | `30` |
+|                   | `LOG_COMPRESS` | 压缩旧日志                 | `true` |
 
 
 ## Kubernetes 部署

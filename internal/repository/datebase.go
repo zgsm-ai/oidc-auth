@@ -147,7 +147,7 @@ func createMySQLDatabaseIfNotExists(cfg *DBConfig) error {
 	}
 	defer func() {
 		sqlDB, closeErr := tempDB.DB()
-		if closeErr == nil {
+		if closeErr == nil && sqlDB != nil {
 			_ = sqlDB.Close()
 		}
 	}()

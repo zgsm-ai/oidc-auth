@@ -14,7 +14,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
 )
 
@@ -214,148 +213,6 @@ func GenerateRandomString(length int) (string, error) {
 	return string(b), nil
 }
 
-// ParseTokenClaims parses a token and returns the claims.
-func ParseTokenClaims(tokenString string) (*AppClaims, error) {
-	keyManager, err := GetEncryptKeyManager()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get AESEncrypt key manager: %w", err)
-	}
-	publicKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(keyManager.GetPublicKeyPEM()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse RSA public key: %w", err)
-	}
-	claims := &AppClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return publicKey, nil
-	})
-	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			return nil, fmt.Errorf("token has expired") // Special handling for expired token error
-		}
-		return nil, fmt.Errorf("token parsing or validation failed: %w", err)
-	}
-	if token == nil || !token.Valid {
-		return nil, errors.New("invalid token")
-	}
-	return claims, nil
-}
-
-// VerifyAccessToken verifies the validity of an Access Token, including revocation checks.
-func VerifyAccessToken(ctx context.Context, accessToken string) (*repository.AuthUser, int, error) {
-	claims, err := ParseTokenClaims(accessToken)
-	if err != nil {
-		return nil, 0, fmt.Errorf("token verification failed: %w", err)
-	}
-	if claims.TokenType != "access_token" {
-		return nil, 0, fmt.Errorf("invalid token type, 'access_token' required")
-	}
-	userID := claims.Subject
-
-	user, err := repository.GetDB().GetByField(ctx, &repository.AuthUser{}, constants.DBIndexField, userID)
-	if err != nil {
-		return nil, 0, err
-	}
-	if user == nil {
-		return nil, 0, fmt.Errorf("user '%s' does not exist", userID)
-	}
-
-	authUser, ok := user.(*repository.AuthUser)
-	if !ok || authUser == nil {
-		return nil, 0, fmt.Errorf("user data type assertion failed")
-	}
-
-	if claims.Platform == "" {
-		return nil, 0, fmt.Errorf("platform is empty")
-	}
-
-	if claims.UserCode != authUser.UserCode {
-		return nil, 0, fmt.Errorf("user code does not match")
-	}
-
-	if claims.Platform == "web" {
-		webDeviceIndex := -1
-		for i, device := range authUser.Devices {
-			if device.Platform == "web" {
-				webDeviceIndex = i
-				break
-			}
-		}
-		if webDeviceIndex == -1 {
-			return nil, 0, fmt.Errorf("web device not found")
-		}
-		if claims.DeviceCode != authUser.Devices[webDeviceIndex].DeviceCode {
-			return nil, 0, fmt.Errorf("web device code does not match")
-		}
-
-		return authUser, webDeviceIndex, nil
-	}
-	accessTokenHash := HashToken(accessToken)
-	pluginDeviceIndex := -1
-	for i, device := range authUser.Devices {
-		if accessTokenHash == device.AccessTokenHash {
-			pluginDeviceIndex = i
-		}
-	}
-	if pluginDeviceIndex == -1 {
-		return nil, 0, fmt.Errorf("device not found")
-	}
-	if claims.DeviceCode != authUser.Devices[pluginDeviceIndex].DeviceCode {
-		return nil, 0, fmt.Errorf("refresh token is invalid or has been revoked")
-	}
-	return authUser, pluginDeviceIndex, nil
-}
-
-// VerifyRefreshToken verifies the validity of a Refresh Token.
-func VerifyRefreshToken(ctx context.Context, refreshToken string) (*repository.AuthUser, int, error) {
-	claims, err := ParseTokenClaims(refreshToken)
-	if err != nil {
-		return nil, 0, fmt.Errorf("token verification failed: %w", err)
-	}
-	if claims.TokenType != "refresh_token" {
-		return nil, 0, fmt.Errorf("invalid token type, 'refresh_token' required")
-	}
-	userID := claims.Subject
-	refreshTokenhash := HashToken(refreshToken)
-
-	user, err := repository.GetDB().GetByField(ctx, &repository.AuthUser{}, constants.DBIndexField, userID)
-	if err != nil {
-		return nil, 0, err
-	}
-	if user == nil {
-		return nil, 0, fmt.Errorf("user '%s' does not exist", userID)
-	}
-
-	authUser, ok := user.(*repository.AuthUser)
-	if !ok || authUser == nil {
-		return nil, 0, fmt.Errorf("user data type assertion failed")
-	}
-
-	if claims.UserCode != authUser.UserCode {
-		return nil, 0, fmt.Errorf("refresh token is invalid or has been revoked")
-	}
-
-	deviceIndex := -1
-	for i, device := range authUser.Devices {
-		if device.RefreshTokenHash == refreshTokenhash {
-			deviceIndex = i
-			break
-		}
-	}
-
-	if deviceIndex == -1 {
-		return nil, 0, fmt.Errorf("refresh token is invalid or has been revoked")
-	}
-
-	if claims.DeviceCode != authUser.Devices[deviceIndex].DeviceCode {
-		return nil, 0, fmt.Errorf("refresh token is invalid or has been revoked")
-	}
-
-	return authUser, deviceIndex, nil
-}
-
 // DecodeJWTPayloadUnverified parses AESEncrypt payload without signature verification
 // Note: This function is only for debugging and viewing token content, should not be used for token validation
 func DecodeJWTPayloadUnverified(tokenStr string) (*JWTPayload, error) {
@@ -446,6 +303,9 @@ func GetUserByTokenHash(ctx context.Context, token, indexName string) (*reposito
 	}
 	if user == nil {
 		return nil, -1, errors.New("user with matching device not found")
+	}
+	if len(user.Devices) == 0 {
+		return nil, -1, errors.New("matching device not found for the user (token might be expired or invalid)")
 	}
 	deviceIndex := -1
 	switch indexName {
