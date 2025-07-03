@@ -28,10 +28,10 @@ type requestQuery struct {
 func (r *requestQuery) validLoginParams(isPlugin bool) error {
 	if isPlugin {
 		if r.VscodeVersion == "" {
-			return errs.ParmaNeedErr("vscode_version")
+			return errs.ParamNeedErr("vscode_version")
 		}
 		if r.MachineCode == "" {
-			return errs.ParmaNeedErr("machine_code")
+			return errs.ParamNeedErr("machine_code")
 		}
 	}
 	return nil
@@ -42,18 +42,18 @@ func (s *Server) loginHandler(c *gin.Context) {
 	var queryParams requestQuery
 
 	if err := c.ShouldBindQuery(&queryParams); err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err.Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err.Error())
 		return
 	}
 	isPlugin := c.DefaultQuery("platform", "") == "plugin" // vscode plugin login
 	err := queryParams.validLoginParams(isPlugin)
 	if err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err.Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err.Error())
 		return
 	}
 	provider := c.DefaultQuery("provider", "") // Get the OAuth provider, such as GitHub or Casdoor.
 	if provider == "" {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
 			"please select a provider, such as casdoor.")
 		return
 	}
@@ -75,7 +75,7 @@ func (s *Server) loginHandler(c *gin.Context) {
 	}
 	providerInstance, err := oauthManager.GetProvider(provider)
 	if providerInstance == nil || err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
 			"this login method is not supported, please choose SMS or GitHub.")
 		return
 	}
@@ -88,13 +88,13 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
 	encryptedData := c.DefaultQuery("state", "")
 	if code == "" {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
-			errs.ParmaNeedErr("code").Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("code").Error())
 		return
 	}
 	if encryptedData == "" {
 		response.JSONError(c, http.StatusInternalServerError, errs.ErrDataEncryption,
-			errs.ParmaNeedErr("state").Error())
+			errs.ParamNeedErr("state").Error())
 		return
 	}
 
@@ -111,7 +111,7 @@ func (s *Server) callbackHandler(c *gin.Context) {
 	state := parameterCarrier.State
 	if state == "" {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrDataDecryption,
-			errs.ParmaNeedErr("state"))
+			errs.ParamNeedErr("state"))
 		return
 	}
 	oauthManager := providers.GetManager()

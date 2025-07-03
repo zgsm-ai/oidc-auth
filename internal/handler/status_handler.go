@@ -21,7 +21,7 @@ func logoutHandler(c *gin.Context) {
 	if platform == "plugin" {
 		accessToken, err := getTokenFromHeader(c)
 		if err != nil {
-			response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err.Error())
+			response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err.Error())
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -32,7 +32,7 @@ func logoutHandler(c *gin.Context) {
 				fmt.Errorf("%s, %s", errs.ErrInfoQueryUserInfo, err))
 			return
 		}
-		if user == nil || index == -1 {
+		if user == nil || index == -1 || len(user.Devices) <= index {
 			response.HandleError(c, http.StatusUnauthorized, errs.ErrTokenInvalid, errs.ErrInfoInvalidToken)
 			return
 		}
@@ -60,14 +60,14 @@ func logoutHandler(c *gin.Context) {
 func statusHandler(c *gin.Context) {
 	platform := c.DefaultQuery("platform", "")
 	if platform != "plugin" {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
 			"device must be vscode plugin")
 		return
 	}
 	accessToken, err := getTokenFromHeader(c)
 	if err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
-			errs.ParmaNeedErr("access_token").Error())
+		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("access_token").Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

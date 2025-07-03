@@ -23,14 +23,6 @@ const (
 	shortTimeout   = 10 * time.Second
 )
 
-var (
-	serverConfig Server
-)
-
-func SetServerConfig(config Server) {
-	serverConfig = config
-}
-
 func getContextWithTimeout(timeout time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), timeout)
 }
@@ -66,7 +58,7 @@ func getDecryptedData(encryptedData string, result any) error {
 func (s *Server) bindAccount(c *gin.Context) {
 	token, err := getTokenFromHeader(c)
 	if err != nil {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err)
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err)
 		return
 	}
 
@@ -75,12 +67,12 @@ func (s *Server) bindAccount(c *gin.Context) {
 	provider := c.DefaultQuery("provider", "casdoor")
 	providerInstance, err := oauthManager.GetProvider(provider)
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParma, err)
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
 		return
 	}
 
 	if s.BaseURL == "" {
-		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParma,
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam,
 			fmt.Errorf("base URL is not configured"))
 		return
 	}
@@ -112,14 +104,14 @@ func (s *Server) bindAccount(c *gin.Context) {
 func (s *Server) bindAccountCallback(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
 	if code == "" {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
-			errs.ParmaNeedErr("code"))
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("code"))
 		return
 	}
 	encryptedData := c.DefaultQuery("state", "")
 	if encryptedData == "" {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma,
-			errs.ParmaNeedErr("state"))
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("state"))
 		return
 	}
 	var parameterCarrier ParameterCarrier
@@ -130,7 +122,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider("casdoor")
 	if err != nil {
-		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParma, err)
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
 		return
 	}
 	ctx, cancel := getContextWithTimeout(defaultTimeout)
@@ -220,7 +212,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 func (s *Server) userInfoHandler(c *gin.Context) {
 	token, err := getTokenFromHeader(c)
 	if err != nil {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParma, err)
+		response.HandleError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err)
 		return
 	}
 

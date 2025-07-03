@@ -61,6 +61,10 @@ func initializeAllConfigurations(cfgFile string) (*config.AppConfig, error) {
 		return nil, fmt.Errorf("failed to initialize config: %w", err)
 	}
 
+	if cfg == nil {
+		return nil, fmt.Errorf("failed to initialize config: nil config")
+	}
+
 	utils.SetGlobalConfig(cfg)
 
 	if err := initLogger(&cfg.Log); err != nil {
@@ -103,7 +107,10 @@ var serveCmd = &cobra.Command{
 			log.Fatal(nil, "Failed to initialize config: %v", err)
 		}
 		httpClient := initHTTPClient(globalConfig.Server.HTTP)
-		_ = service.GetSMSCfg(&globalConfig.SMS)
+		smsc := service.GetSMSCfg(&globalConfig.SMS)
+		if smsc == nil {
+			log.Fatal(nil, "Failed to initialize SMS service")
+		}
 		providerCfg := make(map[string]*providers.ProviderConfig)
 		for name, p := range globalConfig.Providers {
 			providerCfg[name] = &providers.ProviderConfig{
@@ -114,9 +121,9 @@ var serveCmd = &cobra.Command{
 				InternalURL:  p.InternalURL,
 			}
 		}
-		providers.InitializeProviders(providerCfg)
+		err = providers.InitializeProviders(providerCfg)
 		if err != nil {
-			log.Fatal(nil, "Failed to initialize config: %v", err)
+			log.Fatal(err, "Failed to initialize providers")
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
