@@ -143,7 +143,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	}
 	// The already bound one cannot be bound again
 	if userOld.GithubID != "" && userOld.Phone != "" {
-		response.HandleError(c, http.StatusUnauthorized, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
+		response.HandleError(c, http.StatusConflict, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
 		return
 	}
 	var useroldToken string
@@ -168,17 +168,9 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		return
 	}
 	userMarge := userOld
-	if userNewExist == nil {
-		userNewExist = userNew
-	} else {
+	if userNewExist != nil {
 		if userNewExist.GithubID != "" && userNewExist.Phone != "" {
-			response.HandleError(c, http.StatusUnauthorized, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
-			return
-		}
-		// delete one of the accounts
-		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
-			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
-				fmt.Errorf("failed to delete old user, %w", err))
+			response.HandleError(c, http.StatusConflict, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
 			return
 		}
 	}
@@ -192,6 +184,14 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
 			fmt.Errorf("failed to merge account"))
 		return
+	}
+	if userNewExist != nil {
+		// delete one of the accounts
+		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
+				fmt.Errorf("failed to delete old user, %w", err))
+			return
+		}
 	}
 	userMarge.Email = coalesceString(userOld.Email, userNew.Email)
 	userMarge.Phone = coalesceString(userOld.Phone, userNew.Phone)

@@ -56,7 +56,7 @@ services:
     restart: unless-stopped
 
   casdoor:
-    image: lengdanlexin742/casdoor:v1.1.1
+    image: zgsm/casdoor:v1.1.1
     container_name: casdoor
     ports:
       - "8000:8000"
