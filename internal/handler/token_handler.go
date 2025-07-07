@@ -93,7 +93,11 @@ func firstGetToken(machineCode, vscodeVersion, state string) (*utils.TokenPair, 
 		return nil, http.StatusUnauthorized, errs.ErrInfoQueryUserInfo
 	}
 	if user == nil {
-		return nil, http.StatusUnauthorized, errs.ErrInfoInvalidToken
+		//return nil, http.StatusUnauthorized, errs.ErrInfoInvalidToken
+		return &utils.TokenPair{
+			AccessToken:  "",
+			RefreshToken: "",
+		}, http.StatusOK, nil
 	}
 
 	index := findDeviceIndex(user, machineCode, vscodeVersion)
