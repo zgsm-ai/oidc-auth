@@ -159,8 +159,8 @@ func (s *SyncStar) Stargazers() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	users, err := repository.GetDB().GetAllUsersByConditions(ctx, map[string]any{
-		"github_id":   "__NOT_NULL__",
-		"github_star": "__NULL__",
+		"github_id": "__NOT_NULL__",
+		//"github_star": "__NULL__",    #  Considering that canceling a star requires canceling this condition
 	})
 	if err != nil {
 		log.Error(nil, "Failed to get users who have no star: %v", err)
@@ -174,6 +174,8 @@ func (s *SyncStar) Stargazers() error {
 	for i, u := range users {
 		if _, ok := processedMap[u.GithubID]; ok {
 			users[i].GithubStar = "zgsm-ai.zgsm"
+		} else {
+			users[i].GithubStar = ""
 		}
 	}
 
