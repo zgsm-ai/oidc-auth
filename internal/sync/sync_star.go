@@ -173,7 +173,7 @@ func (s *SyncStar) Stargazers() error {
 
 	for i, u := range users {
 		if _, ok := processedMap[u.GithubID]; ok {
-			users[i].GithubStar = "zgsm-ai.zgsm"
+			users[i].GithubStar = fmt.Sprintf("%s.%s", s.Owner, s.Repo)
 		} else {
 			users[i].GithubStar = ""
 		}
