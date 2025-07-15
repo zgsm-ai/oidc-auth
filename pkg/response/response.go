@@ -22,7 +22,6 @@ func JSONSuccess(c *gin.Context, message, data any) {
 
 // JSONError returns error response (basic version)
 func JSONError(c *gin.Context, httpCode int, codeMsg, message string) {
-
 	c.JSON(httpCode, gin.H{
 		"code":      codeMsg,
 		"success":   false,
