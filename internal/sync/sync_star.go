@@ -43,6 +43,11 @@ type ProcessedStargazer struct {
 	StarredAtUnix int64
 }
 
+var (
+	Owner string
+	Repo  string
+)
+
 func (s *SyncStar) StarCount() (int, error) {
 	starURL := fmt.Sprintf("%s/%s/%s", constants.GitHubStarBaseURL, s.Owner, s.Repo)
 

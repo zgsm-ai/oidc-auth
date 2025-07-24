@@ -132,6 +132,7 @@ var serveCmd = &cobra.Command{
 
 		syncStar := github.SyncStar(globalConfig.GithubConfig)
 		syncStar.HTTPClient = initHTTPClient(nil)
+		github.Owner, github.Repo = syncStar.Owner, syncStar.Repo
 		go syncStar.StarSyncTimer(ctx)
 
 		go func() {
