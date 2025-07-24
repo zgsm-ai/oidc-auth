@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-
 	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"github.com/zgsm-ai/oidc-auth/internal/providers"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
 	"github.com/zgsm-ai/oidc-auth/internal/service"
+	github "github.com/zgsm-ai/oidc-auth/internal/sync"
 	"github.com/zgsm-ai/oidc-auth/pkg/response"
 	"github.com/zgsm-ai/oidc-auth/pkg/utils"
 )
@@ -210,6 +210,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		return
 	}
 	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + parameterCarrier.TokenHash
+	url = url + "&bind=true"
 	c.Redirect(http.StatusFound, url)
 }
 
@@ -232,6 +233,14 @@ func (s *Server) userInfoHandler(c *gin.Context) {
 		return
 	}
 
+	isStar := true
+	starProject := user.GithubStar
+
+	project := fmt.Sprintf("%s.%s", github.Owner, github.Repo)
+	if starProject == "" || starProject != project {
+		isStar = false
+	}
+
 	data := gin.H{
 		"state":      c.DefaultQuery("state", ""),
 		"username":   user.Name,
@@ -241,6 +250,7 @@ func (s *Server) userInfoHandler(c *gin.Context) {
 		"githubID":   user.GithubID,
 		"githubName": user.GithubName,
 		"isPrivate":  s.IsPrivate,
+		"isStar":     isStar,
 	}
 
 	response.JSONSuccess(c, "", data)
