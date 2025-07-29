@@ -71,7 +71,7 @@ func (s *Server) SMSHandler(c *gin.Context) {
 			response.JSONError(c, http.StatusBadRequest, "", errmsg)
 			return
 		}
-		messageContent = fmt.Sprintf("验证码：%s，请在5分钟有效时间内使用，请妥善保管。", messageContent)
+		messageContent = fmt.Sprintf("验证码：%s，5分钟内有效，请妥善保管!。", messageContent)
 		_, err = service.SendSMS(s.HTTPClient, token, phoneNumber, messageContent)
 		if err != nil {
 			errmsg := fmt.Sprintf("Error getting sms token: %v", err)
