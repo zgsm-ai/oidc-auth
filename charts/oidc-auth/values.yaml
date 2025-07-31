@@ -56,20 +56,23 @@ providers:
 
 # SMS service configuration for verification codes
 sms:
-  # Enable test mode for SMS service. "true" = test mode, "false" = production mode
-  enabledTest: "true" # true / false
+  # Enable test mode. If "true", SMS won't be sent to real users.
+  enabledTest: "true"
 
-  # Client ID for SMS service authentication
-  clientID: ""
+  # Application ID from the SMS provider.
+  appID: ""
 
-  # Client secret for SMS service authentication
-  clientSecret: ""
+  # API Key from the SMS provider, used for signing requests.
+  apiKey: ""
 
-  # URL endpoint for obtaining JWT token for SMS service
-  tokenURL: "http://<host>/api/api-auth/oauth/get/jwttoken"
+  # Merchant ID, if required by the provider.
+  mchID: ""
 
-  # URL endpoint for sending SMS messages
-  sendURL: "http://<host>/sms/sendSms"
+  # Pre-approved message template ID for the verification code.
+  templateID: ""
+
+  # API endpoint for the send SMS action.
+  sendURL: "https://apis.shlianlu.com/sms/trade/template/send"
 
 # GitHub star synchronization configuration
 syncStar:
@@ -199,12 +202,6 @@ resources:
     memory: 128Mi
 
 env: []
-  # - name: MY_ENV
-  # MY_SECRET_VAR:
-  #   valueFrom:
-  #     secretKeyRef:
-  #       name: my-secret
-  #       key: my-secret-key
 
 autoscaling:
   enabled: false
@@ -217,7 +214,6 @@ rollingUpdate:
   maxUnavailable: "25%"
   maxSurge: "25%"
 
-# Affinity
 affinity:
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:

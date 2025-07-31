@@ -26,12 +26,12 @@ data:
     providers:
       casdoor:
         clientID: {{ .Values.providers.casdoor.clientID | quote }}
-        clientSecret: "PROVIDERS_CASDOOR__CLIENTSECRET"
+        clientSecret: {{ .Values.providers.casdoor.clientSecret | quote }}
         baseURL: {{ .Values.providers.casdoor.baseURL | quote }}
         internalURL: {{ .Values.providers.casdoor.internalURL }}
     syncStar:
       enabled: {{ .Values.syncStar.enabled | quote }}
-      personalToken: "SYNCSTAR_PERSONALTOKEN"
+      personalToken: {{ .Values.syncStar.personalToken | quote }}
       owner: {{ .Values.syncStar.owner | quote }}
       repo: {{ .Values.syncStar.repo | quote }}
       interval: {{ .Values.syncStar.interval }}  # minute
@@ -40,12 +40,12 @@ data:
       host: {{ .Values.database.host | quote }}
       port: {{ .Values.database.port }}
       username: {{ .Values.database.username | quote }}
-      password: "DATABASE_PASSWORD"
+      password: {{ .Values.database.password | quote }}
       dbname: {{ .Values.database.dbname | quote }}
       maxIdleConns: {{ .Values.database.maxIdleConns }}
       maxOpenConns: {{ .Values.database.maxOpenConns }}
     encrypt:
-      aesKey: "ENCRYPT_AESKEY"
+      aesKey: {{ .Values.encrypt.aesKey | quote }}
       enableRsa: {{ .Values.encrypt.enableRsa | quote }}
       privateKey: {{ .Values.encrypt.privateKey | quote }}
       publicKey: {{ .Values.encrypt.publicKey | quote }}
@@ -58,7 +58,8 @@ data:
       compress: {{ .Values.log.compress }}
     sms:
       enabledTest: {{ .Values.sms.enabledTest | quote }}
-      clientID: {{ .Values.sms.clientID | quote }}
-      clientSecret: "SMS_CLIENTSECRET"
-      tokenURL: {{ .Values.sms.tokenURL | quote }}
+      appID: {{ .Values.sms.appID | quote }}
+      apiKey: {{ .Values.sms.apiKey | quote }}
+      mchID: {{ .Values.sms.mchID | quote }}
+      templateID: {{ .Values.sms.templateID | quote }}
       sendURL: {{ .Values.sms.sendURL | quote }}

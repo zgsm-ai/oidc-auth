@@ -111,6 +111,7 @@ var serveCmd = &cobra.Command{
 		if smsc == nil {
 			log.Fatal(nil, "Failed to initialize SMS service")
 		}
+		smsc.HTTPClient = httpClient
 		providerCfg := make(map[string]*providers.ProviderConfig)
 		for name, p := range globalConfig.Providers {
 			providerCfg[name] = &providers.ProviderConfig{

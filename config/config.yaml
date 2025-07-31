@@ -4,7 +4,7 @@ server:
   serverPort: "8080"
 
   # Base URL for the application, used for generating callbacks and redirects
-  baseURL: "https://<host>"
+  baseURL: ""
 
   # Intranet/Extranet access
   isPrivate: "false"
@@ -46,32 +46,35 @@ providers:
     clientSecret: ""
 
     # Casdoor server base URL, for callback address
-    baseURL: "https://<host>"
+    baseURL: ""
 
     # Used to obtain tokens, etc. If provided, it is used, if not provided, the baseURL is used
-    internalURL: "http://test-svc.test-ns.svc.cluster.local:8000"
+    internalURL: ""
 
 # SMS service configuration for verification codes
 sms:
-  # Enable test mode for SMS service. "true" = test mode, "false" = production mode
-  enabledTest: "true" # true / false
+  # Enable test mode. If "true", SMS won't be sent to real users.
+  enabledTest: "false"
 
-  # Client ID for SMS service authentication
-  clientID: ""
+  # Application ID from the SMS provider.
+  appID: ""
 
-  # Client secret for SMS service authentication
-  clientSecret: ""
+  # API Key from the SMS provider, used for signing requests.
+  apiKey: ""
 
-  # URL endpoint for obtaining JWT token for SMS service
-  tokenURL: "http://<host>/api/api-auth/oauth/get/jwttoken"
+  # Merchant ID, if required by the provider.
+  mchID: ""
 
-  # URL endpoint for sending SMS messages
-  sendURL: "http://<host>/sms/sendSms"
+  # Pre-approved message template ID for the verification code.
+  templateID: ""
+
+  # API endpoint for the send SMS action.
+  sendURL: ""
 
 # GitHub star synchronization configuration
 syncStar:
   # Enable or disable star synchronization feature
-  enabled: "true"  # true / false
+  enabled: "false"  # true / false
 
   # GitHub personal access token for API authentication
   personalToken: ""
@@ -80,7 +83,7 @@ syncStar:
   owner: "zgsm-ai"
 
   # GitHub repository name to sync stars from
-  repo: "zgsm"
+  repo: "costrict"
 
   # Synchronization interval in minutes
   interval: 1  # minute
@@ -91,16 +94,16 @@ database:
   type: "postgres"  # mysql or postgres
 
   # Database server hostname or IP address
-  host: "<host>"
+  host: ""
 
   # Database server port number
   port: 5432
 
   # Database username for authentication
-  username: "postgres"
+  username: ""
 
   # Database password for authentication
-  password: "password"
+  password: ""
 
   # Database name to connect to
   dbname: "auth"
