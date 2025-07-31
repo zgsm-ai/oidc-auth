@@ -77,11 +77,13 @@ type EncryptConfig struct {
 }
 
 type SMSConfig struct {
-	EnabledTest  bool   `json:"enabledTest" mapstructure:"enabledTest" validate:"required"`
-	ClientID     string `json:"clientID" mapstructure:"clientID" validate:"required"`
-	ClientSecret string `json:"clientSecret" mapstructure:"clientSecret" validate:"required"`
-	TokenURL     string `json:"tokenURL" mapstructure:"tokenURL" validate:"required,url"`
-	SendURL      string `json:"sendURL" mapstructure:"sendURL" validate:"required"`
+	EnabledTest bool   `json:"enabledTest" mapstructure:"enabledTest" validate:"required"`
+	AppID       string `json:"appID" mapstructure:"appID"`
+	MchID       string `json:"mchID" mapstructure:"mchID"`
+	TemplateID  string `json:"templateID" mapstructure:"templateID"`
+	ApiKey      string `json:"apiKey" mapstructure:"apiKey"`
+	SendURL     string `json:"sendURL" mapstructure:"sendURL"`
+	HTTPClient  *http.Client
 }
 
 type ProviderConfig struct {

@@ -87,32 +87,6 @@ spec:
             {{- end }}
           resources:
             {{ toYaml .Values.resources | nindent 12 }}
-          env:
-            - name: PROVIDERS_CASDOOR_CLIENTSECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
-                  key: casdoor-client-secret
-            - name: SYNCSTAR_PERSONALTOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
-                  key: sync-star-personal-token
-            - name: DATABASE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
-                  key: database-password
-            - name: ENCRYPT_AESKEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
-                  key: aes-key
-            - name: SMS_CLIENTSECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Release.Name }}-secrets
-                  key: sms-sercret
           {{- if not (empty .Values.env) }}
           env:
             {{ toYaml .Values.env | nindent 12 }}

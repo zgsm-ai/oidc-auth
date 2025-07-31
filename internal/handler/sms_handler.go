@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -57,29 +56,13 @@ func (s *Server) SMSHandler(c *gin.Context) {
 		log.Info(c, "processed request to send SMS to: %s, content: %s", phoneNumber, messageContent)
 		log.Info(c, "simulating SMS sent to %s with content: %s", phoneNumber, messageContent)
 	} else {
-		code, err := service.GetLoginCode(SMSCfg.ClientID, SMSCfg.ClientSecret)
+		err := service.SendSMS(phoneNumber, messageContent)
 		if err != nil {
-			errmsg := fmt.Sprintf("Error getting sms code: %v", err)
-			log.Error(c, "Error: %s received data: %v", errmsg)
-			response.JSONError(c, http.StatusBadRequest, "", errmsg)
+			log.Error(c, "failed to send SMS to %s, error: %v", phoneNumber, err)
+			response.JSONError(c, http.StatusInternalServerError, "", "failed to send sms")
 			return
 		}
-		token, err := service.GetJWTToken(code, SMSCfg.ClientID, s.HTTPClient)
-		if err != nil {
-			errmsg := fmt.Sprintf("Error getting sms token: %v", err)
-			log.Error(c, "Error: %s Received data: %v", errmsg)
-			response.JSONError(c, http.StatusBadRequest, "", errmsg)
-			return
-		}
-		messageContent = fmt.Sprintf("验证码：%s，5分钟内有效，请妥善保管!", messageContent)
-		_, err = service.SendSMS(s.HTTPClient, token, phoneNumber, messageContent)
-		if err != nil {
-			errmsg := fmt.Sprintf("Error getting sms token: %v", err)
-			log.Error(c, "Error: %s Received data: %v", errmsg)
-			response.JSONError(c, http.StatusBadRequest, "", errmsg)
-			return
-		}
-		log.Info(c, "simulating SMS sent to %s with content: %s", phoneNumber, messageContent)
+		log.Info(c, "successfully sent SMS to %s for verification", phoneNumber)
 	}
 	c.JSON(http.StatusOK, ResponseBody{Status: "ok", Msg: "simulated SMS sent successfully"})
 }
