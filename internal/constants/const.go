@@ -32,6 +32,7 @@ const (
 const (
 	LoginSuccessPath       = "/login/success"
 	LoginCallbackURI       = "/oidc-auth/api/v1/plugin/login/callback"
+	WebLoginCallbackURI    = "/oidc-auth/api/v1/web/login/callback"
 	BindAccountBindURI     = "/credit/manager/"
 	BindAccountCallbackURI = "/oidc-auth/api/v1/manager/bind/account/callback"
 )
@@ -42,4 +43,10 @@ const (
 	CasdoorTokenURI        = "/api/login/oauth/access_token"
 	CasdoorRefreshTokenURI = "/api/login/oauth/refresh_token"
 	CasdoorMergeURI        = "/api/identity/merge"
+)
+
+// Invite code related constants
+const (
+	InviteCodeLength = 4
+	InviteCodeChars  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 )

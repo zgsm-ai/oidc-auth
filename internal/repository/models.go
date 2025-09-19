@@ -40,6 +40,8 @@ type AuthUser struct {
 	GithubStar       string    `gorm:"type:text" json:"github_star"`
 	Devices          []Device  `gorm:"type:jsonb;serializer:json" json:"devices"`
 	AccessTime       time.Time `gorm:"type:timestamptz" json:"access_time"`
+	InviteCode       string    `gorm:"size:10;index" json:"invite_code"`
+	InviterID        uuid.UUID `gorm:"type:uuid" json:"inviter_id"`
 }
 
 type Device struct {
