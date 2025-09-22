@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 	"net/http"
 	"time"
 
+	"github.com/zgsm-ai/oidc-auth/pkg/errs"
+
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"github.com/zgsm-ai/oidc-auth/internal/providers"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
@@ -202,6 +204,20 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		userMarge.Name = userMarge.GithubName
 	} else {
 		userMarge.Name = coalesceString(userOld.Name, userNew.Name)
+	}
+
+	// Merge invite code and inviter relationship
+	if userOld.InviteCode != "" {
+		userMarge.InviteCode = userOld.InviteCode
+	} else if userNew.InviteCode != "" {
+		userMarge.InviteCode = userNew.InviteCode
+	}
+
+	// Merge inviter relationship, prioritize userOld
+	if userOld.InviterID != uuid.Nil {
+		userMarge.InviterID = userOld.InviterID
+	} else if userNew.InviterID != uuid.Nil {
+		userMarge.InviterID = userNew.InviterID
 	}
 
 	if err := repository.GetDB().Upsert(ctx, userMarge, constants.DBIndexField, userMarge.ID); err != nil {
