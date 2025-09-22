@@ -16,87 +16,48 @@ import (
 	"github.com/zgsm-ai/oidc-auth/pkg/utils"
 )
 
-// webLoginQuery represents web login request parameters
-type webLoginQuery struct {
-	Provider string `form:"provider" binding:"required"`
-	// State      string `form:"state" binding:"required"`
-	InviterCode string `form:"inviter_code"` // Optional inviter's invite code for new user registration
-}
-
 // WebParameterCarrier carries web login parameters through the OAuth flow
 type WebParameterCarrier struct {
-	Provider    string `json:"provider"`
-	InviterCode string `json:"inviter_code"`
+	Provider string `json:"provider"`
 }
 
-// webLoginHandler handles web login requests with optional invite code
+// webLoginHandler handles web login requests
 func (s *Server) webLoginHandler(c *gin.Context) {
-	var queryParams webLoginQuery
-
-	if err := c.ShouldBindQuery(&queryParams); err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err.Error())
-		return
-	}
-
-	provider := queryParams.Provider
-	if provider == "" {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
-			"please select a provider, such as casdoor.")
-		return
-	}
-
-	// Note: Inviter code validation will be done in callback stage after getting user info
+	provider := c.DefaultQuery("provider", "casdoor")
 
 	oauthManager := providers.GetManager()
-
-	// Encrypt web login parameters to pass through OAuth flow
-	encryptedData, err := getEncryptedData(WebParameterCarrier{
-		Provider:    provider,
-		InviterCode: queryParams.InviterCode,
-	})
-	if err != nil {
-		response.JSONError(c, http.StatusInternalServerError, errs.ErrDataEncryption,
-			fmt.Sprintf("failed to encrypt data, %s", err))
-		return
-	}
-
 	providerInstance, err := oauthManager.GetProvider(provider)
-	if providerInstance == nil || err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
-			"this login method is not supported, please choose casdoor.")
+	if err != nil {
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
 		return
 	}
 
-	authURL := providerInstance.GetAuthURL(encryptedData, s.BaseURL+constants.WebLoginCallbackURI)
-	c.Redirect(http.StatusFound, authURL)
+	// Use empty state parameter, invite code will be returned through state after user input on Casdoor page
+	state := ""
+
+	authURL := providerInstance.GetAuthURL(state, s.BaseURL+constants.WebLoginCallbackURI)
+
+	response.JSONSuccess(c, "", map[string]interface{}{
+		"state": state,
+		"url":   authURL,
+	})
 }
 
 // webLoginCallbackHandler handles web login callback with invite code processing
 func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
-	encryptedData := c.DefaultQuery("state", "")
+	inviterCode := c.DefaultQuery("inviter_code", "")
+	if inviterCode == "" {
+		inviterCode = c.DefaultQuery("state", "")
+	}
 
 	if code == "" {
 		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
 			errs.ParamNeedErr("code").Error())
 		return
 	}
-	if encryptedData == "" {
-		response.JSONError(c, http.StatusInternalServerError, errs.ErrDataEncryption,
-			errs.ParamNeedErr("state").Error())
-		return
-	}
 
-	// Decrypt the web login parameters
-	var webParams WebParameterCarrier
-	if err := getDecryptedData(encryptedData, &webParams); err != nil {
-		response.HandleError(c, http.StatusInternalServerError, errs.ErrDataDecryption,
-			fmt.Errorf("failed to decrypt data, %v", err))
-		return
-	}
-
-	provider := webParams.Provider
-	inviterCode := webParams.InviterCode
+	provider := "casdoor" // Fixed to use casdoor
 
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider(provider)
@@ -183,7 +144,6 @@ func GetWebUserByOauth(ctx context.Context, code, provider, inviterCode string) 
 	}
 
 	// Note: User's own invite code will be generated when they first access the invite-code endpoint
-
 	return user, nil
 }
 
