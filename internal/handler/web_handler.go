@@ -25,6 +25,7 @@ type WebParameterCarrier struct {
 // webLoginHandler handles web login requests
 func (s *Server) webLoginHandler(c *gin.Context) {
 	provider := c.DefaultQuery("provider", "casdoor")
+	inviterCode := c.DefaultQuery("inviter_code", "")
 
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider(provider)
@@ -39,8 +40,9 @@ func (s *Server) webLoginHandler(c *gin.Context) {
 	authURL := providerInstance.GetAuthURL(state, s.BaseURL+constants.WebLoginCallbackURI)
 
 	response.JSONSuccess(c, "", map[string]interface{}{
-		"state": state,
-		"url":   authURL,
+		"state":        state,
+		"inviter_code": inviterCode,
+		"url":          authURL,
 	})
 }
 
