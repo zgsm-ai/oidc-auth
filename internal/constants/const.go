@@ -32,7 +32,7 @@ const (
 const (
 	LoginSuccessPath       = "/login/success"
 	LoginCallbackURI       = "/oidc-auth/api/v1/plugin/login/callback"
-	WebLoginCallbackURI    = "/oidc-auth/api/v1/web/login/callback"
+	WebLoginCallbackURI    = "/oidc-auth/api/v1/manager/login/callback"
 	BindAccountBindURI     = "/credit/manager/"
 	BindAccountCallbackURI = "/oidc-auth/api/v1/manager/bind/account/callback"
 )
