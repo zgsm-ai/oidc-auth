@@ -50,8 +50,14 @@ func (s *Server) webLoginHandler(c *gin.Context) {
 func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
 	inviterCode := c.DefaultQuery("inviter_code", "")
+	state := c.DefaultQuery("state", "")
+
+	// 添加调试日志
+	fmt.Printf("回调参数调试 - code: %s, inviter_code: %s, state: %s\n", code, inviterCode, state)
+
 	if inviterCode == "" {
 		inviterCode = c.DefaultQuery("state", "")
+		fmt.Printf("从state参数获取邀请码: %s\n", inviterCode)
 	}
 
 	if code == "" {
