@@ -50,3 +50,8 @@ const (
 	InviteCodeLength = 4
 	InviteCodeChars  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 )
+
+// Quota service related constants
+const (
+	QuotaMergeURI = "/quota-manager/api/v1/quota/merge"
+)

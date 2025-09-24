@@ -169,14 +169,35 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 			fmt.Errorf("does not support custom account binding"))
 		return
 	}
-	userMarge := userOld
+	// Determine GitHub user as primary for merging
+	var githubUser, otherUser *repository.AuthUser
+	var githubToken, otherToken string
+	if userOld.GithubID != "" {
+		githubUser = userOld
+		otherUser = userNew
+		githubToken = useroldToken
+		otherToken = userNew.Devices[0].AccessToken
+	} else if userNew.GithubID != "" {
+		githubUser = userNew
+		otherUser = userOld
+		githubToken = userNew.Devices[0].AccessToken
+		otherToken = useroldToken
+	} else {
+		// Neither has GitHub info, keep original logic with userOld as primary
+		githubUser = userOld
+		otherUser = userNew
+		githubToken = useroldToken
+		otherToken = userNew.Devices[0].AccessToken
+	}
+
+	userMarge := githubUser
 	if userNewExist != nil {
 		if userNewExist.GithubID != "" && userNewExist.Phone != "" {
 			response.HandleError(c, http.StatusConflict, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
 			return
 		}
 	}
-	resp, err := service.MergeByCasdoor(providerInstance, useroldToken, userNew.Devices[0].AccessToken, s.HTTPClient)
+	resp, err := service.MergeByCasdoor(providerInstance, githubToken, otherToken, s.HTTPClient)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
 			fmt.Errorf("account linking failed, %w", err))
@@ -188,6 +209,15 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		return
 	}
 	if userNewExist != nil {
+		// Merge user quota before deleting the account
+		// Always merge from otherUser (non-GitHub user) to userMarge (GitHub user)
+		err = service.MergeUserQuota(userMarge.ID.String(), otherUser.ID.String(), githubToken)
+		if err != nil {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
+				fmt.Errorf("failed to merge user quota, %w", err))
+			return
+		}
+
 		// delete one of the accounts
 		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
 			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
@@ -195,29 +225,22 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 			return
 		}
 	}
-	userMarge.Email = coalesceString(userOld.Email, userNew.Email)
-	userMarge.Phone = coalesceString(userOld.Phone, userNew.Phone)
-	userMarge.GithubID = coalesceString(userOld.GithubID, userNew.GithubID)
-	userMarge.GithubName = coalesceString(userOld.GithubName, userNew.GithubName)
+	// Merge with GitHub user as primary base
+	userMarge.Email = coalesceString(githubUser.Email, otherUser.Email)
+	userMarge.Phone = coalesceString(githubUser.Phone, otherUser.Phone)
+	userMarge.GithubID = coalesceString(githubUser.GithubID, otherUser.GithubID)
+	userMarge.GithubName = coalesceString(githubUser.GithubName, otherUser.GithubName)
 	userMarge.UpdatedAt = time.Now()
 	if userMarge.GithubName != "" {
 		userMarge.Name = userMarge.GithubName
 	} else {
-		userMarge.Name = coalesceString(userOld.Name, userNew.Name)
+		userMarge.Name = coalesceString(githubUser.Name, otherUser.Name)
 	}
-
-	// Merge invite code and inviter relationship
-	if userOld.InviteCode != "" {
-		userMarge.InviteCode = userOld.InviteCode
-	} else if userNew.InviteCode != "" {
-		userMarge.InviteCode = userNew.InviteCode
-	}
-
-	// Merge inviter relationship, prioritize userOld
-	if userOld.InviterID != uuid.Nil {
-		userMarge.InviterID = userOld.InviterID
-	} else if userNew.InviterID != uuid.Nil {
-		userMarge.InviterID = userNew.InviterID
+	userMarge.InviteCode = coalesceString(githubUser.InviteCode, otherUser.InviteCode)
+	if githubUser.InviterID != uuid.Nil {
+		userMarge.InviterID = githubUser.InviterID
+	} else if otherUser.InviterID != uuid.Nil {
+		userMarge.InviterID = otherUser.InviterID
 	}
 
 	if err := repository.GetDB().Upsert(ctx, userMarge, constants.DBIndexField, userMarge.ID); err != nil {
