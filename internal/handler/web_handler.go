@@ -34,9 +34,8 @@ func (s *Server) webLoginHandler(c *gin.Context) {
 		return
 	}
 
-	// Use empty state parameter, invite code will be returned through state after user input on Casdoor page
-	state := "test"
-
+	// Use inviterCode as state parameter
+	state := inviterCode
 	authURL := providerInstance.GetAuthURL(state, s.BaseURL+constants.WebLoginCallbackURI)
 
 	response.JSONSuccess(c, "", map[string]interface{}{
