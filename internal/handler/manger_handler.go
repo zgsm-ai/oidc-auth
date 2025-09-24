@@ -10,7 +10,6 @@ import (
 	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"github.com/zgsm-ai/oidc-auth/internal/providers"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
@@ -237,9 +236,9 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		userMarge.Name = coalesceString(githubUser.Name, otherUser.Name)
 	}
 	userMarge.InviteCode = coalesceString(githubUser.InviteCode, otherUser.InviteCode)
-	if githubUser.InviterID != uuid.Nil {
+	if githubUser.InviterID != nil {
 		userMarge.InviterID = githubUser.InviterID
-	} else if otherUser.InviterID != uuid.Nil {
+	} else if otherUser.InviterID != nil {
 		userMarge.InviterID = otherUser.InviterID
 	}
 

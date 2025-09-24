@@ -155,7 +155,7 @@ func GetWebUserByOauth(ctx context.Context, code, provider, inviterCode string) 
 		if err != nil {
 			return nil, fmt.Errorf("invalid inviter code: %w", err)
 		}
-		user.InviterID = inviter.ID
+		user.InviterID = &inviter.ID
 	}
 
 	// Create virtual Device record for web users to enable account binding functionality
