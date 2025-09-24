@@ -98,8 +98,15 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	// Redirect to bind account page
-	c.Redirect(http.StatusFound, providerInstance.GetEndpoint(false)+constants.BindAccountBindURI)
+	// Get user's access token hash as state parameter
+	var tokenHash string
+	if len(user.Devices) > 0 {
+		tokenHash = user.Devices[0].AccessTokenHash
+	}
+
+	// Redirect to bind account page with tokenHash as state parameter
+	redirectURL := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 // GetWebUserByOauth gets user info from OAuth provider and processes inviter code for web login
