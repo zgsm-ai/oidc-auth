@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -97,7 +98,10 @@ func MergeUserQuota(MainUserID, OtherUserID, userToken string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("quota merge API returned status: %s", resp.Status)
+		// 输出详细日志
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Error(nil, "quota merge API returned status: %s, body: %s", resp.Status, string(bodyBytes))
+		return fmt.Errorf("quota merge API returned status: %s, message: %s", resp.Status, string(bodyBytes))
 	}
 
 	var response QuotaMergeResponse
