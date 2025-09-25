@@ -253,7 +253,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	// Handle existing account deletion and quota merge
 	if userNewExist != nil {
 		// Merge quota before deleting account
-		err = service.MergeUserQuota(userMarge.ID.String(), userNewExist.ID.String(), mainToken)
+		err = service.MergeUserQuota(userMarge.ID.String(), otherUser.ID.String(), mainToken)
 		if err != nil {
 			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
 				fmt.Errorf("failed to merge user quota: %w", err))
@@ -261,7 +261,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		}
 
 		// Delete the existing duplicate account
-		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
+		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, otherUser.ID); err != nil || delNum == 0 {
 			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
 				fmt.Errorf("failed to delete old user, %w", err))
 			return
