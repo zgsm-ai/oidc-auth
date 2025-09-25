@@ -47,8 +47,9 @@ const (
 
 // Invite code related constants
 const (
-	InviteCodeLength = 4
-	InviteCodeChars  = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	InviteCodeLength    = 4
+	InviteCodeChars     = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	InviteCodeSeparator = "+inviter_code=" // separator for inviter code in state parameter
 )
 
 // Quota service related constants

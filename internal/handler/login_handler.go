@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,6 +15,7 @@ import (
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
 	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 	"github.com/zgsm-ai/oidc-auth/pkg/response"
+	"github.com/zgsm-ai/oidc-auth/pkg/utils"
 )
 
 type requestQuery struct {
@@ -98,6 +100,16 @@ func (s *Server) callbackHandler(c *gin.Context) {
 		return
 	}
 
+	// Parse inviter code from state if present (format: originalState+inviter_code=XXXX)
+	var inviterCode string
+	if strings.Contains(encryptedData, constants.InviteCodeSeparator) {
+		parts := strings.Split(encryptedData, constants.InviteCodeSeparator)
+		if len(parts) == 2 {
+			encryptedData = parts[0] // Use original state for decryption
+			inviterCode = parts[1]   // Extract inviter code
+		}
+	}
+
 	// Decrypt the required data using AES.
 	var parameterCarrier ParameterCarrier
 	if err := getDecryptedData(encryptedData, &parameterCarrier); err != nil {
@@ -165,6 +177,41 @@ func (s *Server) callbackHandler(c *gin.Context) {
 		return
 	}
 	user.Devices[0].State = state
+
+	// Handle inviter code validation based on user status
+	if inviterCode != "" {
+		// Check if this is a new user (first time login)
+		var existingUser *repository.AuthUser
+		if user.GithubID != "" {
+			existingUser, err = repository.GetDB().GetUserByField(ctx, "github_id", user.GithubID)
+		} else if user.Phone != "" {
+			existingUser, err = repository.GetDB().GetUserByField(ctx, "phone", user.Phone)
+		} else if user.Email != "" {
+			existingUser, err = repository.GetDB().GetUserByField(ctx, "email", user.Email)
+		}
+
+		if err != nil {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound,
+				fmt.Errorf("failed to check existing user: %w", err))
+			return
+		}
+
+		if existingUser != nil {
+			// Existing user cannot use inviter code
+			response.HandleError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
+				fmt.Errorf("you have registered"))
+			return
+		}
+
+		// New user with inviter code - validate and set inviter ID
+		inviter, err := utils.ValidateInviteCode(ctx, inviterCode)
+		if err != nil {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
+			return
+		}
+		user.InviterID = &inviter.ID
+	}
+
 	err = providerInstance.Update(ctx, user)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,

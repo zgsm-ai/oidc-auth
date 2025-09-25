@@ -48,16 +48,8 @@ func (s *Server) webLoginHandler(c *gin.Context) {
 // webLoginCallbackHandler handles web login callback with invite code processing
 func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
-	inviterCode := c.DefaultQuery("inviter_code", "")
 	state := c.DefaultQuery("state", "")
-
-	// 添加调试日志
-	fmt.Printf("回调参数调试 - code: %s, inviter_code: %s, state: %s\n", code, inviterCode, state)
-
-	if inviterCode == "" {
-		inviterCode = c.DefaultQuery("state", "")
-		fmt.Printf("从state参数获取邀请码: %s\n", inviterCode)
-	}
+	inviterCode := state // inviter code is in the state parameter
 
 	if code == "" {
 		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
@@ -77,8 +69,8 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// Get user info from OAuth provider and validate inviter code
-	user, err := GetWebUserByOauth(ctx, code, provider, inviterCode)
+	// Get user info from OAuth provider
+	user, err := GetWebUserByOauth(ctx, code, provider)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound,
 			fmt.Errorf("%s: %v", errs.ErrInfoQueryUserInfo, err))
@@ -90,7 +82,41 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	// Update or create user with invite code processing
+	// Handle inviter code validation based on user status
+	if inviterCode != "" {
+		// Check if this is a new user (first time login)
+		var existingUser *repository.AuthUser
+		if user.GithubID != "" {
+			existingUser, err = repository.GetDB().GetUserByField(ctx, "github_id", user.GithubID)
+		} else if user.Phone != "" {
+			existingUser, err = repository.GetDB().GetUserByField(ctx, "phone", user.Phone)
+		} else if user.Email != "" {
+			existingUser, err = repository.GetDB().GetUserByField(ctx, "email", user.Email)
+		}
+
+		if err != nil {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound,
+				fmt.Errorf("failed to check existing user: %w", err))
+			return
+		}
+
+		if existingUser != nil {
+			// Existing user cannot use inviter code
+			response.HandleError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
+				fmt.Errorf("you have registered"))
+			return
+		}
+
+		// New user with inviter code - validate and set inviter ID
+		inviter, err := utils.ValidateInviteCode(ctx, inviterCode)
+		if err != nil {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
+			return
+		}
+		user.InviterID = &inviter.ID
+	}
+
+	// Update or create user
 	err = providerInstance.Update(ctx, user)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
@@ -110,7 +136,7 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 }
 
 // GetWebUserByOauth gets user info from OAuth provider and processes inviter code for web login
-func GetWebUserByOauth(ctx context.Context, code, provider, inviterCode string) (*repository.AuthUser, error) {
+func GetWebUserByOauth(ctx context.Context, code, provider string) (*repository.AuthUser, error) {
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider(provider)
 	if err != nil {
@@ -127,35 +153,6 @@ func GetWebUserByOauth(ctx context.Context, code, provider, inviterCode string) 
 	user, err := providerInstance.GetUserInfo(ctx, token.AccessToken)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", errs.ErrInfoQueryUserInfo, err)
-	}
-
-	// Check if this is a new user (first time login)
-	var existingUser *repository.AuthUser
-	if user.GithubID != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "github_id", user.GithubID)
-	} else if user.Phone != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "phone", user.Phone)
-	} else if user.Email != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "email", user.Email)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to check existing user: %w", err)
-	}
-
-	// Handle inviter code validation based on user status
-	if inviterCode != "" {
-		if existingUser != nil {
-			// Existing user cannot use inviter code
-			return nil, fmt.Errorf("you have registered")
-		}
-
-		// New user with inviter code - validate and set inviter ID
-		inviter, err := utils.ValidateInviteCode(ctx, inviterCode)
-		if err != nil {
-			return nil, fmt.Errorf("invalid inviter code: %w", err)
-		}
-		user.InviterID = &inviter.ID
 	}
 
 	// Create virtual Device record for web users to enable account binding functionality
