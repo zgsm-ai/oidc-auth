@@ -19,12 +19,22 @@ type QuotaMergeRequest struct {
 	OtherUserID string `json:"other_user_id" validate:"required,uuid"` // 其他用户ID（被删除用户）
 }
 
+// QuotaMergeData represents the data structure for quota merge response
+type QuotaMergeData struct {
+	MainUserID  string `json:"main_user_id"`
+	OtherUserID string `json:"other_user_id"`
+	Amount      int64  `json:"amount"`
+	Operation   string `json:"operation"`
+	Status      string `json:"status"`
+	Message     string `json:"message"`
+}
+
+// QuotaMergeResponse represents the complete quota merge response
 type QuotaMergeResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-	Data    struct {
-		MergedQuota int64 `json:"merged_quota"`
-	} `json:"data"`
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Success bool           `json:"success"`
+	Data    QuotaMergeData `json:"data"`
 }
 
 var (
@@ -43,7 +53,7 @@ func InitQuotaService(cfg *config.QuotaConfig) {
 	})
 }
 
-func MergeUserQuota(reservedUserID, deletedUserID, userToken string) error {
+func MergeUserQuota(MainUserID, OtherUserID, userToken string) error {
 	if quotaConfig == nil {
 		log.Info(nil, "Quota service is not configured, skipping quota merge")
 		return nil
@@ -55,10 +65,11 @@ func MergeUserQuota(reservedUserID, deletedUserID, userToken string) error {
 	}
 
 	url := quotaConfig.BaseURL + constants.QuotaMergeURI
+	log.Info(nil, "start merged quota from other user %s to main user %s", OtherUserID, MainUserID)
 
 	request := QuotaMergeRequest{
-		MainUserID:  reservedUserID,
-		OtherUserID: deletedUserID,
+		MainUserID:  MainUserID,
+		OtherUserID: OtherUserID,
 	}
 
 	jsonData, err := json.Marshal(request)
@@ -94,10 +105,10 @@ func MergeUserQuota(reservedUserID, deletedUserID, userToken string) error {
 		return fmt.Errorf("failed to decode quota merge response: %w", err)
 	}
 
-	if response.Status != "success" {
+	if !response.Success {
 		return fmt.Errorf("quota merge failed: %s", response.Message)
 	}
 
-	log.Info(nil, "Successfully merged quota from other user %s to main user %s", deletedUserID, reservedUserID)
+	log.Info(nil, "Successfully merged quota from other user %s to main user %s", OtherUserID, MainUserID)
 	return nil
 }
