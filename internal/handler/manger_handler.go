@@ -273,7 +273,21 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 			fmt.Errorf("%s: %w", errs.ErrInfoUpdateUserInfo, err))
 		return
 	}
-	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + parameterCarrier.TokenHash
+
+	// Use main account's token hash for redirect to ensure token validity
+	var tokenHash string
+	for _, device := range userMarge.Devices {
+		if device.AccessToken == mainToken {
+			tokenHash = device.AccessTokenHash
+			break
+		}
+	}
+	// Fallback: use first available token hash if main token not found
+	if tokenHash == "" && len(userMarge.Devices) > 0 {
+		tokenHash = userMarge.Devices[0].AccessTokenHash
+	}
+
+	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
 	url = url + "&bind=true"
 	c.Redirect(http.StatusFound, url)
 }
