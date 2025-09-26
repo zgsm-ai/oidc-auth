@@ -100,7 +100,6 @@ func (s *Server) callbackHandler(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("调试encryptedData: %s\n", encryptedData)
 	// Parse inviter code from state if present (format: originalState+inviter_code=XXXX)
 	var inviterCode string
 	if strings.Contains(encryptedData, constants.InviteCodeSeparator) {
@@ -110,7 +109,6 @@ func (s *Server) callbackHandler(c *gin.Context) {
 			inviterCode = parts[1]   // Extract inviter code
 		}
 	}
-	fmt.Printf("调试encryptedData: %s, inviterCode: %s\n", encryptedData, inviterCode)
 
 	// Decrypt the required data using AES.
 	var parameterCarrier ParameterCarrier

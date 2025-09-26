@@ -16,8 +16,8 @@ import (
 )
 
 type QuotaMergeRequest struct {
-	MainUserID  string `json:"main_user_id" validate:"required,uuid"`  // 主用户ID（保留用户）
-	OtherUserID string `json:"other_user_id" validate:"required,uuid"` // 其他用户ID（被删除用户）
+	MainUserID  string `json:"main_user_id" validate:"required,uuid"`  // The user who will receive the merged quota
+	OtherUserID string `json:"other_user_id" validate:"required,uuid"` // The user who willbe merged into the main user
 }
 
 // QuotaMergeData represents the data structure for quota merge response
@@ -98,7 +98,6 @@ func MergeUserQuota(MainUserID, OtherUserID, userToken string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// 输出详细日志
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		log.Error(nil, "quota merge API returned status: %s, body: %s", resp.Status, string(bodyBytes))
 		return fmt.Errorf("quota merge API returned status: %s, message: %s", resp.Status, string(bodyBytes))
