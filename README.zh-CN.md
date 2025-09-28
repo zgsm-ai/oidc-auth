@@ -111,6 +111,7 @@ docker run -d \
 |                   | `ENCRYPT_ENABLERSA` | 启用 RSA                | `false` |
 |                   | `ENCRYPT_PRIVATEKEY` | RSA 私钥文件路径            | `config/private.pem` |
 |                   | `ENCRYPT_PUBLICKEY` | RSA 公钥文件路径            | `config/public.pem` |
+| **配额管理器**         | `QUOTAMANAGER_BASEURL` | 配额管理器服务基础URL        | - |
 | **日志配置**          | `LOG_LEVEL` | 日志级别                  | `info` |
 |                   | `LOG_FILENAME` | 日志文件路径                | `logs/app.log` |
 |                   | `LOG_MAXSIZE` | 日志文件大小限制(MB)          | `100` |

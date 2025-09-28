@@ -20,6 +20,7 @@ type AppConfig struct {
 	Encrypt      EncryptConfig             `json:"encrypt" mapstructure:"encrypt" validate:"required"`
 	SMS          SMSConfig                 `json:"sms" mapstructure:"sms" validate:"required"`
 	Providers    map[string]ProviderConfig `json:"providers" mapstructure:"providers"`
+	QuotaManager QuotaConfig               `json:"quotaManager" mapstructure:"quotaManager"`
 }
 
 type Server struct {
@@ -92,6 +93,11 @@ type ProviderConfig struct {
 	EncryptKey   string `json:"encryptKey" mapstructure:"encryptKey"`
 	BaseURL      string `json:"baseURL" mapstructure:"baseURL"`
 	InternalURL  string `json:"internalURL" mapstructure:"internalURL"`
+}
+
+type QuotaConfig struct {
+	BaseURL    string `json:"baseURL" mapstructure:"baseURL"`
+	HTTPClient *http.Client
 }
 
 const (

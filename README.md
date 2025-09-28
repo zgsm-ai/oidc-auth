@@ -112,6 +112,7 @@ Complete environment variable configuration for containerized deployment:
 |                             | `ENCRYPT_ENABLERSA` | Enable RSA | `false` |
 |                             | `ENCRYPT_PRIVATEKEY` | RSA private key file path | `config/private.pem` |
 |                             | `ENCRYPT_PUBLICKEY` | RSA public key file path | `config/public.pem` |
+| **Quota Manager**           | `QUOTAMANAGER_BASEURL` | QuotaManager service base URL | - |
 | **Logging**                 | `LOG_LEVEL` | Log level | `info` |
 |                             | `LOG_FILENAME` | Log file path | `logs/app.log` |
 |                             | `LOG_MAXSIZE` | Log file size limit (MB) | `100` |

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/zgsm-ai/oidc-auth/internal/constants"
 	"github.com/zgsm-ai/oidc-auth/internal/providers"
@@ -16,87 +17,47 @@ import (
 	"github.com/zgsm-ai/oidc-auth/pkg/utils"
 )
 
-// webLoginQuery represents web login request parameters
-type webLoginQuery struct {
-	Provider string `form:"provider" binding:"required"`
-	// State      string `form:"state" binding:"required"`
-	InviterCode string `form:"inviter_code"` // Optional inviter's invite code for new user registration
-}
-
 // WebParameterCarrier carries web login parameters through the OAuth flow
 type WebParameterCarrier struct {
-	Provider    string `json:"provider"`
-	InviterCode string `json:"inviter_code"`
+	Provider string `json:"provider"`
 }
 
-// webLoginHandler handles web login requests with optional invite code
+// webLoginHandler handles web login requests
 func (s *Server) webLoginHandler(c *gin.Context) {
-	var queryParams webLoginQuery
-
-	if err := c.ShouldBindQuery(&queryParams); err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam, err.Error())
-		return
-	}
-
-	provider := queryParams.Provider
-	if provider == "" {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
-			"please select a provider, such as casdoor.")
-		return
-	}
-
-	// Note: Inviter code validation will be done in callback stage after getting user info
+	provider := c.DefaultQuery("provider", "casdoor")
+	inviterCode := c.DefaultQuery("inviter_code", "")
 
 	oauthManager := providers.GetManager()
-
-	// Encrypt web login parameters to pass through OAuth flow
-	encryptedData, err := getEncryptedData(WebParameterCarrier{
-		Provider:    provider,
-		InviterCode: queryParams.InviterCode,
-	})
-	if err != nil {
-		response.JSONError(c, http.StatusInternalServerError, errs.ErrDataEncryption,
-			fmt.Sprintf("failed to encrypt data, %s", err))
-		return
-	}
-
 	providerInstance, err := oauthManager.GetProvider(provider)
-	if providerInstance == nil || err != nil {
-		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
-			"this login method is not supported, please choose casdoor.")
+	if err != nil {
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
 		return
 	}
 
-	authURL := providerInstance.GetAuthURL(encryptedData, s.BaseURL+constants.WebLoginCallbackURI)
-	c.Redirect(http.StatusFound, authURL)
+	// Use inviterCode as state parameter
+	state := inviterCode
+	authURL := providerInstance.GetAuthURL(state, s.BaseURL+constants.WebLoginCallbackURI)
+
+	response.JSONSuccess(c, "", map[string]interface{}{
+		"state":        state,
+		"inviter_code": inviterCode,
+		"url":          authURL,
+	})
 }
 
 // webLoginCallbackHandler handles web login callback with invite code processing
 func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
-	encryptedData := c.DefaultQuery("state", "")
+	state := c.DefaultQuery("state", "")
+	inviterCode := state // inviter code is in the state parameter
 
 	if code == "" {
 		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
 			errs.ParamNeedErr("code").Error())
 		return
 	}
-	if encryptedData == "" {
-		response.JSONError(c, http.StatusInternalServerError, errs.ErrDataEncryption,
-			errs.ParamNeedErr("state").Error())
-		return
-	}
 
-	// Decrypt the web login parameters
-	var webParams WebParameterCarrier
-	if err := getDecryptedData(encryptedData, &webParams); err != nil {
-		response.HandleError(c, http.StatusInternalServerError, errs.ErrDataDecryption,
-			fmt.Errorf("failed to decrypt data, %v", err))
-		return
-	}
-
-	provider := webParams.Provider
-	inviterCode := webParams.InviterCode
+	provider := "casdoor" // Fixed to use casdoor
 
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider(provider)
@@ -108,8 +69,8 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// Get user info from OAuth provider and validate inviter code
-	user, err := GetWebUserByOauth(ctx, code, provider, inviterCode)
+	// Get user info from OAuth provider
+	user, err := GetWebUserByOauth(ctx, code, provider)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound,
 			fmt.Errorf("%s: %v", errs.ErrInfoQueryUserInfo, err))
@@ -121,7 +82,41 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	// Update or create user with invite code processing
+	// Handle inviter code validation based on user status
+	if inviterCode != "" {
+		// Check if this is a new user (first time login)
+		var existingUser *repository.AuthUser
+		if user.GithubID != "" {
+			existingUser, err = repository.GetDB().GetUserByField(ctx, "github_id", user.GithubID)
+		} else if user.Phone != "" {
+			existingUser, err = repository.GetDB().GetUserByField(ctx, "phone", user.Phone)
+		} else if user.Email != "" {
+			existingUser, err = repository.GetDB().GetUserByField(ctx, "email", user.Email)
+		}
+
+		if err != nil {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound,
+				fmt.Errorf("failed to check existing user: %w", err))
+			return
+		}
+
+		if existingUser != nil {
+			// Existing user cannot use inviter code
+			response.HandleError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
+				fmt.Errorf("you have registered"))
+			return
+		}
+
+		// New user with inviter code - validate and set inviter ID
+		inviter, err := utils.ValidateInviteCode(ctx, inviterCode)
+		if err != nil {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
+			return
+		}
+		user.InviterID = &inviter.ID
+	}
+
+	// Update or create user
 	err = providerInstance.Update(ctx, user)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
@@ -129,12 +124,19 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	// Redirect to bind account page
-	c.Redirect(http.StatusFound, providerInstance.GetEndpoint(false)+constants.BindAccountBindURI)
+	// Get user's access token hash as state parameter
+	var tokenHash string
+	if len(user.Devices) > 0 {
+		tokenHash = user.Devices[0].AccessTokenHash
+	}
+
+	// Redirect to bind account page with tokenHash as state parameter
+	redirectURL := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
+	c.Redirect(http.StatusFound, redirectURL)
 }
 
 // GetWebUserByOauth gets user info from OAuth provider and processes inviter code for web login
-func GetWebUserByOauth(ctx context.Context, code, provider, inviterCode string) (*repository.AuthUser, error) {
+func GetWebUserByOauth(ctx context.Context, code, provider string) (*repository.AuthUser, error) {
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider(provider)
 	if err != nil {
@@ -153,37 +155,49 @@ func GetWebUserByOauth(ctx context.Context, code, provider, inviterCode string) 
 		return nil, fmt.Errorf("%s: %v", errs.ErrInfoQueryUserInfo, err)
 	}
 
-	// Check if this is a new user (first time login)
-	var existingUser *repository.AuthUser
-	if user.GithubID != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "github_id", user.GithubID)
-	} else if user.Phone != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "phone", user.Phone)
-	} else if user.Email != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "email", user.Email)
+	// Create virtual Device record for web users to enable account binding functionality
+	var tokenProvider, refreshToken, accessToken string
+	if provider == "casdoor" {
+		refreshToken = token.RefreshToken
+		accessToken = token.AccessToken
+		tokenProvider = "custom" // Use token generated by provider
 	}
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to check existing user: %w", err)
+	if user.ID == uuid.Nil {
+		user.ID = uuid.New()
 	}
 
-	// Handle inviter code validation based on user status
-	if inviterCode != "" {
-		if existingUser != nil {
-			// Existing user cannot use inviter code
-			return nil, fmt.Errorf("you have registered")
-		}
-
-		// New user with inviter code - validate and set inviter ID
-		inviter, err := utils.ValidateInviteCode(ctx, inviterCode)
-		if err != nil {
-			return nil, fmt.Errorf("invalid inviter code: %w", err)
-		}
-		user.InviterID = inviter.ID
+	// Calculate token hashes for proper token management
+	var refreshTokenHash, accessTokenHash string
+	if refreshToken != "" {
+		refreshTokenHash = utils.HashToken(refreshToken)
 	}
+	if accessToken != "" {
+		accessTokenHash = utils.HashToken(accessToken)
+	}
+
+	// Create web device record with web-specific identifiers (following plugin field order)
+	user.Devices = append(user.Devices, repository.Device{
+		ID:               uuid.New(),
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+		MachineCode:      "web-" + user.ID.String()[:8], // Generate unique web identifier
+		UriScheme:        "https",                       // Web protocol
+		VSCodeVersion:    "web-browser",                 // Fixed identifier for web platform
+		PluginVersion:    "1.0.0",                       // Simplified version
+		RefreshToken:     refreshToken,
+		AccessToken:      accessToken,
+		Provider:         provider,
+		Platform:         "web",                          // Platform identifier
+		Status:           constants.LoginStatusLoggedOut, // Initial status
+		TokenProvider:    tokenProvider,                  // Token provider type
+		RefreshTokenHash: refreshTokenHash,
+		AccessTokenHash:  accessTokenHash,
+		State:            "", // Will be set during callback if needed
+		DeviceCode:       "",
+	})
 
 	// Note: User's own invite code will be generated when they first access the invite-code endpoint
-
 	return user, nil
 }
 
