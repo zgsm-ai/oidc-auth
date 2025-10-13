@@ -25,6 +25,7 @@ type AuthMethod struct {
 
 type MergeResponse struct {
 	Status            string       `json:"status"`
+	Msg               string       `json:"msg"`
 	UniversalID       string       `json:"universal_id"`
 	DeletedUserID     string       `json:"deleted_user_id"`
 	MergedAuthMethods []AuthMethod `json:"merged_auth_methods"`

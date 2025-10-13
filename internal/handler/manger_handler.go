@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zgsm-ai/oidc-auth/pkg/errs"
+	"github.com/zgsm-ai/oidc-auth/pkg/log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zgsm-ai/oidc-auth/internal/constants"
@@ -215,8 +216,10 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		return
 	}
 	if resp.Status != "ok" {
+		log.Error(c, "failed to merge account. status: %s, msg: %s, UniversalID: %s, DeletedUserID: %s",
+			resp.Status, resp.Msg, resp.UniversalID, resp.DeletedUserID)
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
-			fmt.Errorf("failed to merge account"))
+			fmt.Errorf("failed to merge account, status: %s, msg: %s", resp.Status, resp.Msg))
 		return
 	}
 
