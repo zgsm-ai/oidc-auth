@@ -180,56 +180,26 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 
 	// Determine main account (userMarge) and other account based on GitHub priority
 	// Strategy: GitHub account always becomes the main account when both accounts exist
-	var userMarge, otherUser *repository.AuthUser
-	var mainToken, otherToken string
-
-	if userNewExist == nil {
-		// Scenario 1: Binding account doesn't exist - simple binding
-		// Current logged-in user becomes main account, new OAuth info is supplementary
-		userMarge = userOld
-		otherUser = userNew
-		mainToken = useroldToken
-		otherToken = userNew.Devices[0].AccessToken
-	} else {
-		// Scenario 2: Binding account exists - GitHub account becomes main account
-		if userNewExist.GithubID != "" {
-			// Existing account has GitHub info, use it as main account
-			userMarge = userNewExist
-			otherUser = userOld
-			mainToken = userNewExist.Devices[0].AccessToken
-			otherToken = useroldToken
-		} else {
-			// Current account becomes main
-			userMarge = userOld
-			otherUser = userNewExist
-			mainToken = useroldToken
-			otherToken = userNewExist.Devices[0].AccessToken
-		}
-	}
+	userMarge, otherUser, mainToken, otherToken := determineMainAccount(userOld, userNew, userNewExist, useroldToken)
 
 	// Merge fields from otherUser into userMarge
 	userMarge.Email = coalesceString(userMarge.Email, otherUser.Email)
 	userMarge.Phone = coalesceString(userMarge.Phone, otherUser.Phone)
 	userMarge.GithubID = coalesceString(userMarge.GithubID, otherUser.GithubID)
 	userMarge.GithubName = coalesceString(userMarge.GithubName, otherUser.GithubName)
-	userMarge.Company = coalesceString(userMarge.Company, otherUser.Company)
-	userMarge.Location = coalesceString(userMarge.Location, otherUser.Location)
-	userMarge.EmployeeNumber = coalesceString(userMarge.EmployeeNumber, otherUser.EmployeeNumber)
-	userMarge.GithubStar = coalesceString(userMarge.GithubStar, otherUser.GithubStar)
-
-	// Take higher Vip level
-	if otherUser.Vip > userMarge.Vip {
-		userMarge.Vip = otherUser.Vip
-	}
-
-	// Set Name with GitHub priority
 	userMarge.UpdatedAt = time.Now()
 	if userMarge.GithubName != "" {
 		userMarge.Name = userMarge.GithubName
 	} else {
 		userMarge.Name = coalesceString(userMarge.Name, otherUser.Name)
 	}
-
+	userMarge.Company = coalesceString(userMarge.Company, otherUser.Company)
+	userMarge.Location = coalesceString(userMarge.Location, otherUser.Location)
+	userMarge.EmployeeNumber = coalesceString(userMarge.EmployeeNumber, otherUser.EmployeeNumber)
+	userMarge.GithubStar = coalesceString(userMarge.GithubStar, otherUser.GithubStar)
+	if otherUser.Vip > userMarge.Vip {
+		userMarge.Vip = otherUser.Vip
+	}
 	userMarge.InviteCode = coalesceString(userMarge.InviteCode, otherUser.InviteCode)
 	if userMarge.InviterID == nil || *userMarge.InviterID == uuid.Nil {
 		if otherUser.InviterID != nil && *otherUser.InviterID != uuid.Nil {
@@ -275,17 +245,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	}
 
 	// Use main account's token hash for redirect to ensure token validity
-	var tokenHash string
-	for _, device := range userMarge.Devices {
-		if device.AccessToken == mainToken {
-			tokenHash = device.AccessTokenHash
-			break
-		}
-	}
-	// Fallback: use first available token hash if main token not found
-	if tokenHash == "" && len(userMarge.Devices) > 0 {
-		tokenHash = userMarge.Devices[0].AccessTokenHash
-	}
+	tokenHash := getTokenHashForRedirect(userMarge, mainToken)
 
 	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
 	url = url + "&bind=true"
@@ -341,4 +301,55 @@ func coalesceString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// determineMainAccount determines the main account and other account based on GitHub priority
+// Strategy: GitHub account always becomes the main account when both accounts exist
+// Returns: main account user, other account user, main token, other token
+func determineMainAccount(userOld, userNew, userNewExist *repository.AuthUser, useroldToken string) (*repository.AuthUser, *repository.AuthUser, string, string) {
+	var userMarge, otherUser *repository.AuthUser
+	var mainToken, otherToken string
+
+	if userNewExist == nil {
+		// Scenario 1: Binding account doesn't exist - simple binding
+		// Current logged-in user becomes main account, new OAuth info is supplementary
+		userMarge = userOld
+		otherUser = userNew
+		mainToken = useroldToken
+		otherToken = userNew.Devices[0].AccessToken
+	} else {
+		// Scenario 2: Binding account exists - GitHub account becomes main account
+		if userNewExist.GithubID != "" {
+			// Existing account has GitHub info, use it as main account
+			userMarge = userNewExist
+			otherUser = userOld
+			mainToken = userNewExist.Devices[0].AccessToken
+			otherToken = useroldToken
+		} else {
+			// Current account becomes main
+			userMarge = userOld
+			otherUser = userNewExist
+			mainToken = useroldToken
+			otherToken = userNewExist.Devices[0].AccessToken
+		}
+	}
+
+	return userMarge, otherUser, mainToken, otherToken
+}
+
+// getTokenHashForRedirect gets the token hash for redirect to ensure token validity
+// It searches for the device with the matching main token, falls back to first available token hash
+func getTokenHashForRedirect(userMarge *repository.AuthUser, mainToken string) string {
+	var tokenHash string
+	for _, device := range userMarge.Devices {
+		if device.AccessToken == mainToken {
+			tokenHash = device.AccessTokenHash
+			break
+		}
+	}
+	// Fallback: use first available token hash if main token not found
+	if tokenHash == "" && len(userMarge.Devices) > 0 {
+		tokenHash = userMarge.Devices[0].AccessTokenHash
+	}
+	return tokenHash
 }

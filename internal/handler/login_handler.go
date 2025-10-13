@@ -100,15 +100,8 @@ func (s *Server) callbackHandler(c *gin.Context) {
 		return
 	}
 
-	// Parse inviter code from state if present (format: originalState+inviter_code=XXXX)
-	var inviterCode string
-	if strings.Contains(encryptedData, constants.InviteCodeSeparator) {
-		parts := strings.Split(encryptedData, constants.InviteCodeSeparator)
-		if len(parts) == 2 {
-			encryptedData = parts[0] // Use original state for decryption
-			inviterCode = parts[1]   // Extract inviter code
-		}
-	}
+	// Parse inviter code from state if present
+	encryptedData, inviterCode := parseInviterCodeFromState(encryptedData)
 
 	// Decrypt the required data using AES.
 	var parameterCarrier ParameterCarrier
@@ -180,36 +173,9 @@ func (s *Server) callbackHandler(c *gin.Context) {
 
 	// Handle inviter code validation based on user status
 	if inviterCode != "" {
-		// Check if this is a new user (first time login)
-		var existingUser *repository.AuthUser
-		if user.GithubID != "" {
-			existingUser, err = repository.GetDB().GetUserByField(ctx, "github_id", user.GithubID)
-		} else if user.Phone != "" {
-			existingUser, err = repository.GetDB().GetUserByField(ctx, "phone", user.Phone)
-		} else if user.Email != "" {
-			existingUser, err = repository.GetDB().GetUserByField(ctx, "email", user.Email)
-		}
-
-		if err != nil {
-			response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound,
-				fmt.Errorf("failed to check existing user: %w", err))
+		if err := handleInviterCodeValidation(ctx, c, user, inviterCode); err != nil {
 			return
 		}
-
-		if existingUser != nil {
-			// Existing user cannot use inviter code
-			response.HandleError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
-				fmt.Errorf("you have registered"))
-			return
-		}
-
-		// New user with inviter code - validate and set inviter ID
-		inviter, err := utils.ValidateInviteCode(ctx, inviterCode)
-		if err != nil {
-			response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
-			return
-		}
-		user.InviterID = &inviter.ID
 	}
 
 	err = providerInstance.Update(ctx, user)
@@ -269,4 +235,58 @@ func GetUserByOauth(ctx context.Context, typ, code string, parm *ParameterCarrie
 		})
 	}
 	return user, nil
+}
+
+// parseInviterCodeFromState parses inviter code from state if present
+// format: originalState+inviter_code=XXXX
+// returns: processed encryptedData (without inviter code) and inviter code
+func parseInviterCodeFromState(encryptedData string) (string, string) {
+	var inviterCode string
+	if strings.Contains(encryptedData, constants.InviteCodeSeparator) {
+		parts := strings.Split(encryptedData, constants.InviteCodeSeparator)
+		if len(parts) == 2 {
+			encryptedData = parts[0] // Use original state for decryption
+			inviterCode = parts[1]   // Extract inviter code
+		}
+	}
+	return encryptedData, inviterCode
+}
+
+// handleInviterCodeValidation handles inviter code validation based on user status
+// It checks if the user is new (first time login) and validates the inviter code
+func handleInviterCodeValidation(ctx context.Context, c *gin.Context, user *repository.AuthUser, inviterCode string) error {
+	// Check if this is a new user (first time login)
+	var existingUser *repository.AuthUser
+	var err error
+
+	if user.GithubID != "" {
+		existingUser, err = repository.GetDB().GetUserByField(ctx, "github_id", user.GithubID)
+	} else if user.Phone != "" {
+		existingUser, err = repository.GetDB().GetUserByField(ctx, "phone", user.Phone)
+	} else if user.Email != "" {
+		existingUser, err = repository.GetDB().GetUserByField(ctx, "email", user.Email)
+	}
+
+	if err != nil {
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound,
+			fmt.Errorf("failed to check existing user: %w", err))
+		return err
+	}
+
+	if existingUser != nil {
+		// Existing user cannot use inviter code
+		response.HandleError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
+			fmt.Errorf("you have registered"))
+		return fmt.Errorf("existing user cannot use inviter code")
+	}
+
+	// New user with inviter code - validate and set inviter ID
+	inviter, err := utils.ValidateInviteCode(ctx, inviterCode)
+	if err != nil {
+		response.HandleError(c, http.StatusInternalServerError, errs.ErrBadRequestParam, err)
+		return err
+	}
+	user.InviterID = &inviter.ID
+
+	return nil
 }
