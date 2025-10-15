@@ -96,18 +96,11 @@ func (s *CasdoorProvider) Update(ctx context.Context, data *repository.AuthUser)
 	}
 	var existingUser *repository.AuthUser
 	var err error
-	if data.GithubID != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "github_id", data.GithubID)
-		if err != nil {
-			return fmt.Errorf("failed to get user: %w", err)
-		}
-	} else if data.Phone != "" {
-		existingUser, err = repository.GetDB().GetUserByField(ctx, "phone", data.Phone)
-		if err != nil {
-			return fmt.Errorf("failed to get user: %w", err)
-		}
-	} else {
-		return fmt.Errorf("user must have either github_id, phone, or email")
+
+	// data.ID must not be nil
+	existingUser, err = repository.GetDB().GetUserByField(ctx, "id", data.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
 	}
 
 	if existingUser == nil {
@@ -123,13 +116,8 @@ func (s *CasdoorProvider) Update(ctx context.Context, data *repository.AuthUser)
 				return err
 			}
 		}
-		if data.GithubID != "" {
-			err = repository.GetDB().Upsert(ctx, data, "github_id", data.GithubID)
-		} else if data.Phone != "" {
-			err = repository.GetDB().Upsert(ctx, data, "phone", data.Phone)
-		} else {
-			return fmt.Errorf("user must have either github_id, phone, or email")
-		}
+		// 使用 id 作为幂等键进行 Upsert，确保手机号变更不会导致重复创建
+		err = repository.GetDB().Upsert(ctx, data, "id", data.ID)
 		if err != nil {
 			return fmt.Errorf("failed to create user: %w", err)
 		}
@@ -183,18 +171,10 @@ func (s *CasdoorProvider) Update(ctx context.Context, data *repository.AuthUser)
 		existingUser.Devices = append(existingUser.Devices, newDevice)
 	}
 
-	if data.GithubID != "" {
-		err = repository.GetDB().Upsert(ctx, *existingUser, "github_id", existingUser.GithubID)
-		if err != nil {
-			return fmt.Errorf("failed to get user: %w", err)
-		}
-	} else if data.Phone != "" {
-		err = repository.GetDB().Upsert(ctx, *existingUser, "phone", existingUser.Phone)
-		if err != nil {
-			return fmt.Errorf("failed to get user: %w", err)
-		}
-	} else {
-		return fmt.Errorf("user must have either github_id, phone, or email")
+	// 统一通过 id 执行 Upsert，更新手机号等资料到同一条记录
+	err = repository.GetDB().Upsert(ctx, *existingUser, "id", existingUser.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
 	}
 	return nil
 }
