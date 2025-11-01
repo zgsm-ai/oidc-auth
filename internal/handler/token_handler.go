@@ -290,10 +290,10 @@ func GenerateTokenPairByCustom(ctx context.Context, user *repository.AuthUser, i
 	}, nil
 }
 
-// refreshTempTokenHandler 刷新 tempToken 接口
-// 接收旧的 tempToken，验证后生成新的随机 tempToken 并返回
+// refreshTempTokenHandler refreshes tempToken interface
+// Receives access_token, validates it, generates a new random tempToken and returns it
 func refreshTempTokenHandler(c *gin.Context) {
-	oldTempToken, err := getTokenFromHeader(c)
+	token, err := getTokenFromHeader(c)
 	if err != nil {
 		response.JSONError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
 			errs.ParamNeedErr("token").Error())
@@ -303,10 +303,10 @@ func refreshTempTokenHandler(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	user, deviceIndex, err := utils.GetUserByTokenHash(ctx, oldTempToken, "temp_token")
+	user, deviceIndex, err := utils.GetUserByTokenHash(ctx, token, "access_token_hash")
 	if err != nil || user == nil || deviceIndex == -1 {
 		response.JSONError(c, http.StatusUnauthorized, errs.ErrUserNotFound,
-			fmt.Sprintf("Invalid old hash: %s", err.Error()))
+			fmt.Sprintf("Invalid token: %s", err.Error()))
 		return
 	}
 
