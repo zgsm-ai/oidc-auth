@@ -116,7 +116,10 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 		user.InviterID = &inviter.ID
 	}
 
-	// Update or create user
+	// Get or create web device temp token for redirect
+	tempToken := getTempTokenForWebRedirect(user)
+
+	// Update or create user with new temp token
 	err = providerInstance.Update(ctx, user)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
@@ -124,14 +127,8 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 		return
 	}
 
-	// Get user's access token hash as state parameter
-	var tokenHash string
-	if len(user.Devices) > 0 {
-		tokenHash = user.Devices[0].AccessTokenHash
-	}
-
-	// Redirect to bind account page with tokenHash as state parameter
-	redirectURL := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
+	// Redirect to bind account page with tempToken as state parameter
+	redirectURL := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tempToken
 	c.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -177,6 +174,9 @@ func GetWebUserByOauth(ctx context.Context, code, provider string) (*repository.
 	}
 
 	// Create web device record with web-specific identifiers (following plugin field order)
+	tempToken := utils.GenerateTempToken()
+	tempTokenExpiry := utils.GenerateTempTokenExpiry()
+
 	user.Devices = append(user.Devices, repository.Device{
 		ID:               uuid.New(),
 		CreatedAt:        time.Now(),
@@ -195,6 +195,8 @@ func GetWebUserByOauth(ctx context.Context, code, provider string) (*repository.
 		AccessTokenHash:  accessTokenHash,
 		State:            "", // Will be set during callback if needed
 		DeviceCode:       "",
+		TempToken:        tempToken,
+		TempTokenExpiry:  tempTokenExpiry,
 	})
 
 	// Note: User's own invite code will be generated when they first access the invite-code endpoint
@@ -249,4 +251,32 @@ func (s *Server) getUserInviteCodeHandler(c *gin.Context) {
 	response.JSONSuccess(c, "", gin.H{
 		"invite_code": user.InviteCode,
 	})
+}
+
+// getTempTokenForWebRedirect updates web device temp token for redirect
+// Since GetWebUserByOauth always creates a web device, we just need to find and update it
+func getTempTokenForWebRedirect(user *repository.AuthUser) string {
+	// Generate new temp token and expiry
+	tempToken := utils.GenerateTempToken()
+	tempTokenExpiry := utils.GenerateTempTokenExpiry()
+
+	// Find web device and update temp token (GetWebUserByOauth always creates one)
+	for i, device := range user.Devices {
+		if device.Platform == "web" {
+			user.Devices[i].TempToken = tempToken
+			user.Devices[i].TempTokenExpiry = tempTokenExpiry
+			user.Devices[i].UpdatedAt = time.Now()
+			return tempToken
+		}
+	}
+
+	// Fallback: update first device if
+	if len(user.Devices) > 0 {
+		user.Devices[0].TempToken = tempToken
+		user.Devices[0].TempTokenExpiry = tempTokenExpiry
+		user.Devices[0].UpdatedAt = time.Now()
+		return tempToken
+	}
+
+	return ""
 }

@@ -41,6 +41,8 @@ func logoutHandler(c *gin.Context) {
 		user.Devices[index].RefreshToken = ""
 		user.Devices[index].AccessTokenHash = ""
 		user.Devices[index].AccessToken = ""
+		user.Devices[index].TempToken = ""
+		user.Devices[index].TempTokenExpiry = nil
 		user.UpdatedAt = time.Now()
 		err = repository.GetDB().Upsert(ctx, user, constants.DBIndexField, user.ID)
 		if err != nil {
