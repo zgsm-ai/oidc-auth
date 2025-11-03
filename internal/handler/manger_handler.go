@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/zgsm-ai/oidc-auth/pkg/errs"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/zgsm-ai/oidc-auth/pkg/errs"
+	"github.com/zgsm-ai/oidc-auth/pkg/log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zgsm-ai/oidc-auth/internal/constants"
@@ -155,6 +158,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	}
 	// Get a new user and first determine whether it exists in the database
 	var userNewExist *repository.AuthUser
+
 	ctx, cancel = getContextWithTimeout(defaultTimeout)
 	defer cancel()
 	if userOld.GithubID != "" {
@@ -167,41 +171,74 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 			fmt.Errorf("does not support custom account binding"))
 		return
 	}
-	userMarge := userOld
+	// Check for conflict: if existing account is already fully bound (has both GitHub and Phone)
 	if userNewExist != nil {
 		if userNewExist.GithubID != "" && userNewExist.Phone != "" {
 			response.HandleError(c, http.StatusConflict, errs.ErrUpdateInfo, fmt.Errorf("this account has already been bound"))
 			return
 		}
 	}
-	resp, err := service.MergeByCasdoor(providerInstance, useroldToken, userNew.Devices[0].AccessToken, s.HTTPClient)
+
+	// Determine main account (userMarge) and other account based on GitHub priority
+	// Strategy: GitHub account always becomes the main account when both accounts exist
+	userMarge, otherUser, mainToken, otherToken := determineMainAccount(userOld, userNew, userNewExist, useroldToken)
+
+	// Merge fields from otherUser into userMarge
+	userMarge.Email = coalesceString(userMarge.Email, otherUser.Email)
+	userMarge.Phone = coalesceString(userMarge.Phone, otherUser.Phone)
+	userMarge.GithubID = coalesceString(userMarge.GithubID, otherUser.GithubID)
+	userMarge.GithubName = coalesceString(userMarge.GithubName, otherUser.GithubName)
+	userMarge.UpdatedAt = time.Now()
+	if userMarge.GithubName != "" {
+		userMarge.Name = userMarge.GithubName
+	} else {
+		userMarge.Name = coalesceString(userMarge.Name, otherUser.Name)
+	}
+	userMarge.Company = coalesceString(userMarge.Company, otherUser.Company)
+	userMarge.Location = coalesceString(userMarge.Location, otherUser.Location)
+	userMarge.EmployeeNumber = coalesceString(userMarge.EmployeeNumber, otherUser.EmployeeNumber)
+	userMarge.GithubStar = coalesceString(userMarge.GithubStar, otherUser.GithubStar)
+	if otherUser.Vip > userMarge.Vip {
+		userMarge.Vip = otherUser.Vip
+	}
+	userMarge.InviteCode = coalesceString(userMarge.InviteCode, otherUser.InviteCode)
+	if userMarge.InviterID == nil || *userMarge.InviterID == uuid.Nil {
+		if otherUser.InviterID != nil && *otherUser.InviterID != uuid.Nil {
+			userMarge.InviterID = otherUser.InviterID
+		}
+	}
+
+	// Call Casdoor merge API
+	resp, err := service.MergeByCasdoor(providerInstance, mainToken, otherToken, s.HTTPClient)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
 			fmt.Errorf("account linking failed, %w", err))
 		return
 	}
 	if resp.Status != "ok" {
+		log.Error(c, "failed to merge account. status: %s, msg: %s, UniversalID: %s, DeletedUserID: %s",
+			resp.Status, resp.Msg, resp.UniversalID, resp.DeletedUserID)
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
-			fmt.Errorf("failed to merge account"))
+			fmt.Errorf("failed to merge account, status: %s, msg: %s", resp.Status, resp.Msg))
 		return
 	}
+
+	// Handle existing account deletion and quota merge
 	if userNewExist != nil {
-		// delete one of the accounts
-		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, userNewExist.ID); err != nil || delNum == 0 {
+		// Merge quota before deleting account
+		err = service.MergeUserQuota(userMarge.ID.String(), otherUser.ID.String(), mainToken)
+		if err != nil {
+			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
+				fmt.Errorf("failed to merge user quota: %w", err))
+			return
+		}
+
+		// Delete the existing duplicate account
+		if delNum, err := repository.GetDB().DeleteUserByField(ctx, constants.DBIndexField, otherUser.ID); err != nil || delNum == 0 {
 			response.HandleError(c, http.StatusInternalServerError, errs.ErrBindAccount,
 				fmt.Errorf("failed to delete old user, %w", err))
 			return
 		}
-	}
-	userMarge.Email = coalesceString(userOld.Email, userNew.Email)
-	userMarge.Phone = coalesceString(userOld.Phone, userNew.Phone)
-	userMarge.GithubID = coalesceString(userOld.GithubID, userNew.GithubID)
-	userMarge.GithubName = coalesceString(userOld.GithubName, userNew.GithubName)
-	userMarge.UpdatedAt = time.Now()
-	if userMarge.GithubName != "" {
-		userMarge.Name = userMarge.GithubName
-	} else {
-		userMarge.Name = coalesceString(userOld.Name, userNew.Name)
 	}
 
 	if err := repository.GetDB().Upsert(ctx, userMarge, constants.DBIndexField, userMarge.ID); err != nil {
@@ -209,7 +246,11 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 			fmt.Errorf("%s: %w", errs.ErrInfoUpdateUserInfo, err))
 		return
 	}
-	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + parameterCarrier.TokenHash
+
+	// Use main account's token hash for redirect to ensure token validity
+	tokenHash := getTokenHashForRedirect(userMarge, mainToken)
+
+	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
 	url = url + "&bind=true"
 	c.Redirect(http.StatusFound, url)
 }
@@ -263,4 +304,55 @@ func coalesceString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// determineMainAccount determines the main account and other account based on GitHub priority
+// Strategy: GitHub account always becomes the main account when both accounts exist
+// Returns: main account user, other account user, main token, other token
+func determineMainAccount(userOld, userNew, userNewExist *repository.AuthUser, useroldToken string) (*repository.AuthUser, *repository.AuthUser, string, string) {
+	var userMarge, otherUser *repository.AuthUser
+	var mainToken, otherToken string
+
+	if userNewExist == nil {
+		// Scenario 1: Binding account doesn't exist - simple binding
+		// Current logged-in user becomes main account, new OAuth info is supplementary
+		userMarge = userOld
+		otherUser = userNew
+		mainToken = useroldToken
+		otherToken = userNew.Devices[0].AccessToken
+	} else {
+		// Scenario 2: Binding account exists - GitHub account becomes main account
+		if userNewExist.GithubID != "" {
+			// Existing account has GitHub info, use it as main account
+			userMarge = userNewExist
+			otherUser = userOld
+			mainToken = userNewExist.Devices[0].AccessToken
+			otherToken = useroldToken
+		} else {
+			// Current account becomes main
+			userMarge = userOld
+			otherUser = userNewExist
+			mainToken = useroldToken
+			otherToken = userNewExist.Devices[0].AccessToken
+		}
+	}
+
+	return userMarge, otherUser, mainToken, otherToken
+}
+
+// getTokenHashForRedirect gets the token hash for redirect to ensure token validity
+// It searches for the device with the matching main token, falls back to first available token hash
+func getTokenHashForRedirect(userMarge *repository.AuthUser, mainToken string) string {
+	var tokenHash string
+	for _, device := range userMarge.Devices {
+		if device.AccessToken == mainToken {
+			tokenHash = device.AccessTokenHash
+			break
+		}
+	}
+	// Fallback: use first available token hash if main token not found
+	if tokenHash == "" && len(userMarge.Devices) > 0 {
+		tokenHash = userMarge.Devices[0].AccessTokenHash
+	}
+	return tokenHash
 }

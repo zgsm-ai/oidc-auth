@@ -24,6 +24,7 @@ var allowedFields = map[string]map[string]bool{
 		"email":       true,
 		"provider":    true,
 		"phone":       true,
+		"invite_code": true,
 	},
 	"StarUser": {
 		"id":          true,

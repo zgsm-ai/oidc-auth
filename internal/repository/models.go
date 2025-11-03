@@ -22,24 +22,26 @@ type SyncLock struct {
 }
 
 type AuthUser struct {
-	ID               uuid.UUID `gorm:"type:uuid; primaryKey" json:"id"`
-	CreatedAt        time.Time `gorm:"type:timestamptz" json:"created_at"`
-	UpdatedAt        time.Time `gorm:"type:timestamptz" json:"updated_at"`
-	Name             string    `gorm:"index; size:100" json:"name"`
-	GithubID         string    `gorm:"size:100;" json:"github_id"`
-	GithubName       string    `gorm:"size:100" json:"github_name"`
-	Vip              int       `gorm:"default:0" json:"vip"`
-	Phone            string    `gorm:"size:20" json:"phone"`
-	Email            string    `gorm:"size:100;index" json:"email"`
-	Password         string    `gorm:"size:100" json:"password"`
-	Company          string    `gorm:"size:100" json:"company"`
-	Location         string    `gorm:"size:100" json:"location"`
-	UserCode         string    `gorm:"size:100" json:"user_code"`
-	ExternalAccounts uuid.UUID `gorm:"size:100" json:"external_accounts"`
-	EmployeeNumber   string    `gorm:"size:100" json:"employee_number"`
-	GithubStar       string    `gorm:"type:text" json:"github_star"`
-	Devices          []Device  `gorm:"type:jsonb;serializer:json" json:"devices"`
-	AccessTime       time.Time `gorm:"type:timestamptz" json:"access_time"`
+	ID               uuid.UUID  `gorm:"type:uuid; primaryKey" json:"id"`
+	CreatedAt        time.Time  `gorm:"type:timestamptz" json:"created_at"`
+	UpdatedAt        time.Time  `gorm:"type:timestamptz" json:"updated_at"`
+	Name             string     `gorm:"index; size:100" json:"name"`
+	GithubID         string     `gorm:"size:100;" json:"github_id"`
+	GithubName       string     `gorm:"size:100" json:"github_name"`
+	Vip              int        `gorm:"default:0" json:"vip"`
+	Phone            string     `gorm:"size:20" json:"phone"`
+	Email            string     `gorm:"size:100;index" json:"email"`
+	Password         string     `gorm:"size:100" json:"password"`
+	Company          string     `gorm:"size:100" json:"company"`
+	Location         string     `gorm:"size:100" json:"location"`
+	UserCode         string     `gorm:"size:100" json:"user_code"`
+	ExternalAccounts uuid.UUID  `gorm:"size:100" json:"external_accounts"`
+	EmployeeNumber   string     `gorm:"size:100" json:"employee_number"`
+	GithubStar       string     `gorm:"type:text" json:"github_star"`
+	Devices          []Device   `gorm:"type:jsonb;serializer:json" json:"devices"`
+	AccessTime       time.Time  `gorm:"type:timestamptz" json:"access_time"`
+	InviteCode       string     `gorm:"size:10;index" json:"invite_code"`
+	InviterID        *uuid.UUID `gorm:"type:uuid" json:"inviter_id"`
 }
 
 type Device struct {

@@ -48,6 +48,9 @@ func (s *Server) SetupRouter(r *gin.Engine) {
 		webOauthServer.GET("bind/account", s.bindAccount)
 		webOauthServer.GET("bind/account/callback", s.bindAccountCallback)
 		webOauthServer.GET("userinfo", s.userInfoHandler)
+		webOauthServer.GET("login", s.webLoginHandler)
+		webOauthServer.GET("login/callback", s.webLoginCallbackHandler)
+		webOauthServer.GET("invite-code", s.getUserInviteCodeHandler)
 	}
 	r.POST("/oidc-auth/api/v1/send/sms", s.SMSHandler)
 	health := r.Group("/health")
