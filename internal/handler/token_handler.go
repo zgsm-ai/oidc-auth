@@ -196,10 +196,14 @@ func updateUserInfoMid(user *repository.AuthUser, index int, tokenPair *utils.To
 	user.Devices[index].RefreshToken = refreshTokenNew
 	user.Devices[index].AccessTokenHash = accessTokenHash
 	user.Devices[index].RefreshTokenHash = refreshTokenHash
+	user.Devices[index].TempToken = utils.GenerateTempToken()
+	user.Devices[index].TempTokenExpiry = utils.GenerateTempTokenExpiry()
 }
 
-func getTokenByHash(c *gin.Context) {
-	accessTokenHash, err := getTokenFromHeader(c)
+// getTokenByTempToken exchanges temporary token for access token
+// Validates the temporary token hash and marks it as used after successful exchange
+func getTokenByTempToken(c *gin.Context) {
+	TempToken, err := getTokenFromHeader(c)
 	if err != nil {
 		response.JSONError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
 			errs.ParamNeedErr("token").Error())
@@ -207,18 +211,43 @@ func getTokenByHash(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	tokenPair, err := utils.GetTokenByTokenHash(ctx, accessTokenHash)
-	if err != nil {
+
+	// Verify hash is valid (not used and not expired) before getting token
+	user, deviceIndex, err := utils.GetUserByTokenHash(ctx, TempToken, "temp_token")
+	if err != nil || user == nil || deviceIndex == -1 {
 		response.JSONError(c, http.StatusUnauthorized, errs.ErrUserNotFound,
 			fmt.Sprintf("%s, %s", errs.ErrInfoQueryUserInfo, err.Error()))
 		return
 	}
+
+	// Check hash expiration time
+	device := user.Devices[deviceIndex]
+	if !utils.ValidateTempTokenExpiry(device.TempTokenExpiry) {
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrTokenInvalid,
+			"temp token has been used or expired")
+		return
+	}
+	tokenPair := &utils.TokenPair{
+		AccessToken:  device.AccessToken,
+		RefreshToken: device.RefreshToken,
+	}
+
+	// Mark hash as used (set expiration time to nil)
+	device.TempTokenExpiry = nil
+	user.Devices[deviceIndex] = device
+	if err := repository.GetDB().Upsert(ctx, user, constants.DBIndexField, user.ID); err != nil {
+		response.JSONError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
+			fmt.Sprintf("failed to mark hash as used: %s", err.Error()))
+		return
+	}
+
 	response.JSONSuccess(c, "", gin.H{
 		"state":        c.DefaultQuery("state", ""),
 		"access_token": tokenPair.AccessToken,
 	})
 }
 
+// getTokenFromHeader extracts token from Authorization header
 func getTokenFromHeader(c *gin.Context) (string, error) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
@@ -259,4 +288,45 @@ func GenerateTokenPairByCustom(ctx context.Context, user *repository.AuthUser, i
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
 	}, nil
+}
+
+// refreshTempTokenHandler refreshes tempToken interface
+// Receives access_token, validates it, generates a new random tempToken and returns it
+func refreshTempTokenHandler(c *gin.Context) {
+	token, err := getTokenFromHeader(c)
+	if err != nil {
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("token").Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	user, deviceIndex, err := utils.GetUserByTokenHash(ctx, token, "access_token_hash")
+	if err != nil || user == nil || deviceIndex == -1 {
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrUserNotFound,
+			fmt.Sprintf("Invalid token: %s", err.Error()))
+		return
+	}
+
+	device := user.Devices[deviceIndex]
+
+	newTempToken := utils.GenerateTempToken()
+	newTempTokenExpiry := utils.GenerateTempTokenExpiry()
+
+	device.TempToken = newTempToken
+	device.TempTokenExpiry = newTempTokenExpiry
+	user.Devices[deviceIndex] = device
+
+	if err := repository.GetDB().Upsert(ctx, user, constants.DBIndexField, user.ID); err != nil {
+		response.JSONError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
+			fmt.Sprintf("failed to update temp token: %s", err.Error()))
+		return
+	}
+
+	response.JSONSuccess(c, "", gin.H{
+		"state":      c.DefaultQuery("state", ""),
+		"temp_token": newTempToken,
+	})
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
 )
@@ -201,6 +202,26 @@ func HashToken(token string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
+// GenerateTempToken Generate random UUID as temporary token value
+func GenerateTempToken() string {
+	return uuid.NewString()
+}
+
+// GenerateTempTokenExpiry Generate hash expiration time (default 15 seconds)
+func GenerateTempTokenExpiry() *time.Time {
+	expiry := time.Now().Add(15 * time.Second)
+	return &expiry
+}
+
+// ValidateTempTokenExpiry Validate whether temporary hash is expired or has been used
+// Returns true if valid, false if used or expired
+func ValidateTempTokenExpiry(expiry *time.Time) bool {
+	if expiry == nil {
+		return false // Already used (nil value indicates used)
+	}
+	return time.Now().Before(*expiry)
+}
+
 func GenerateRandomString(length int) (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, length)
@@ -256,34 +277,6 @@ func DecodeJWTPayloadUnverified(tokenStr string) (*JWTPayload, error) {
 	return &result, nil
 }
 
-func GetTokenByTokenHash(ctx context.Context, tokenHash string) (*TokenPair, error) {
-	if tokenHash == "" {
-		return nil, errors.New("token cannot be empty")
-	}
-	queryConditions := map[string]any{"access_token_hash": tokenHash}
-	user, err := repository.GetDB().GetUserByDeviceConditions(ctx, queryConditions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user by device conditions: %w", err)
-	}
-	if user == nil {
-		return nil, errors.New("user with matching device not found")
-	}
-	deviceIndex := -1
-	for i, device := range user.Devices {
-		if device.AccessTokenHash == tokenHash {
-			deviceIndex = i
-			break
-		}
-	}
-	if deviceIndex == -1 {
-		return nil, errors.New("matching device not found for the user (token might be expired or invalid)")
-	}
-	return &TokenPair{
-		AccessToken:  user.Devices[deviceIndex].AccessToken,
-		RefreshToken: user.Devices[deviceIndex].RefreshToken,
-	}, nil
-}
-
 func GetUserByTokenHash(ctx context.Context, token, indexName string) (*repository.AuthUser, int, error) {
 	if token == "" {
 		return nil, -1, errors.New("token cannot be empty")
@@ -291,11 +284,16 @@ func GetUserByTokenHash(ctx context.Context, token, indexName string) (*reposito
 	validIndexNames := map[string]struct{}{
 		"refresh_token_hash": {},
 		"access_token_hash":  {},
+		"temp_token":         {},
 	}
 	if _, ok := validIndexNames[indexName]; !ok {
-		return nil, -1, fmt.Errorf("invalid indexName: %s. Expected 'refresh_token_hash' or 'access_token_hash'", indexName)
+		return nil, -1, fmt.Errorf("invalid indexName: %s. Expected 'refresh_token_hash' or 'access_token_hash' or 'temp_tokens'", indexName)
 	}
-	tokenHash := HashToken(token)
+	tokenHash := token
+	// The temp token does not require encryption processing
+	if indexName != "temp_token" {
+		tokenHash = HashToken(token)
+	}
 	queryConditions := map[string]any{indexName: tokenHash}
 	user, err := repository.GetDB().GetUserByDeviceConditions(ctx, queryConditions)
 	if err != nil {
@@ -319,6 +317,13 @@ func GetUserByTokenHash(ctx context.Context, token, indexName string) (*reposito
 	case "access_token_hash":
 		for i, device := range user.Devices {
 			if device.AccessTokenHash == tokenHash {
+				deviceIndex = i
+				break
+			}
+		}
+	case "temp_token":
+		for i, device := range user.Devices {
+			if device.TempToken == tokenHash {
 				deviceIndex = i
 				break
 			}

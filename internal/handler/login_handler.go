@@ -148,6 +148,8 @@ func (s *Server) callbackHandler(c *gin.Context) {
 			userAlreadyExist.Devices[index].AccessToken = ""
 			userAlreadyExist.Devices[index].RefreshTokenHash = ""
 			userAlreadyExist.Devices[index].RefreshToken = ""
+			userAlreadyExist.Devices[index].TempToken = ""
+			userAlreadyExist.Devices[index].TempTokenExpiry = nil
 			userAlreadyExist.Devices[index].State = ""
 			userAlreadyExist.Devices[index].UpdatedAt = time.Now()
 			userAlreadyExist.UpdatedAt = time.Now()
@@ -218,20 +220,25 @@ func GetUserByOauth(ctx context.Context, typ, code string, parm *ParameterCarrie
 		if user.ID == uuid.Nil {
 			user.ID = uuid.New()
 		}
+		tempToken := utils.GenerateTempToken()
+		tempTokenExpiry := utils.GenerateTempTokenExpiry()
+
 		user.Devices = append(user.Devices, repository.Device{
-			ID:            uuid.New(),
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
-			MachineCode:   mac,
-			UriScheme:     uScheme,
-			VSCodeVersion: vsVersion,
-			PluginVersion: pVersion,
-			RefreshToken:  refreshToken,
-			AccessToken:   accessToken,
-			Provider:      provider,
-			Platform:      "plugin",
-			Status:        constants.LoginStatusLoggedOut,
-			TokenProvider: tokenProvider,
+			ID:              uuid.New(),
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+			MachineCode:     mac,
+			UriScheme:       uScheme,
+			VSCodeVersion:   vsVersion,
+			PluginVersion:   pVersion,
+			RefreshToken:    refreshToken,
+			AccessToken:     accessToken,
+			Provider:        provider,
+			Platform:        "plugin",
+			Status:          constants.LoginStatusLoggedOut,
+			TokenProvider:   tokenProvider,
+			TempToken:       tempToken,
+			TempTokenExpiry: tempTokenExpiry,
 		})
 	}
 	return user, nil

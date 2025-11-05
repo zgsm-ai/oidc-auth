@@ -241,16 +241,17 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		}
 	}
 
+	// Refresh temp token for redirect to exchange for real token
+	tempToken := getTempTokenForRedirect(userMarge, mainToken)
+
+	// Save updated user info with merged data and new temp token
 	if err := repository.GetDB().Upsert(ctx, userMarge, constants.DBIndexField, userMarge.ID); err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
 			fmt.Errorf("%s: %w", errs.ErrInfoUpdateUserInfo, err))
 		return
 	}
 
-	// Use main account's token hash for redirect to ensure token validity
-	tokenHash := getTokenHashForRedirect(userMarge, mainToken)
-
-	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
+	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tempToken
 	url = url + "&bind=true"
 	c.Redirect(http.StatusFound, url)
 }
@@ -340,19 +341,30 @@ func determineMainAccount(userOld, userNew, userNewExist *repository.AuthUser, u
 	return userMarge, otherUser, mainToken, otherToken
 }
 
-// getTokenHashForRedirect gets the token hash for redirect to ensure token validity
-// It searches for the device with the matching main token, falls back to first available token hash
-func getTokenHashForRedirect(userMarge *repository.AuthUser, mainToken string) string {
-	var tokenHash string
-	for _, device := range userMarge.Devices {
+// getTempTokenForRedirect gets the token hash for redirect to ensure token validity
+// Generate temp token for redirect to exchange for real token
+func getTempTokenForRedirect(userMarge *repository.AuthUser, mainToken string) string {
+	var oldTempToken string
+	// Generate new temp token and expiry
+	tempToken := utils.GenerateTempToken()
+	tempTokenExpiry := utils.GenerateTempTokenExpiry()
+
+	// Find device with matching main token and update temp token
+	for i, device := range userMarge.Devices {
 		if device.AccessToken == mainToken {
-			tokenHash = device.AccessTokenHash
-			break
+			oldTempToken = userMarge.Devices[i].TempToken
+			userMarge.Devices[i].TempToken = tempToken
+			userMarge.Devices[i].TempTokenExpiry = tempTokenExpiry
+			userMarge.Devices[i].UpdatedAt = time.Now()
 		}
 	}
-	// Fallback: use first available token hash if main token not found
-	if tokenHash == "" && len(userMarge.Devices) > 0 {
-		tokenHash = userMarge.Devices[0].AccessTokenHash
+
+	// Fallback: update first device if main token not found
+	if oldTempToken == "" && len(userMarge.Devices) > 0 {
+		userMarge.Devices[0].TempToken = tempToken
+		userMarge.Devices[0].TempTokenExpiry = tempTokenExpiry
+		userMarge.Devices[0].UpdatedAt = time.Now()
 	}
-	return tokenHash
+
+	return tempToken
 }
