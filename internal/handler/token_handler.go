@@ -224,7 +224,7 @@ func getTokenByTempToken(c *gin.Context) {
 	device := user.Devices[deviceIndex]
 	if !utils.ValidateTempTokenExpiry(device.TempTokenExpiry) {
 		response.JSONError(c, http.StatusUnauthorized, errs.ErrTokenInvalid,
-			"hash has been used or expired")
+			"temp token has been used or expired")
 		return
 	}
 	tokenPair := &utils.TokenPair{

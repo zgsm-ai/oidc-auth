@@ -45,8 +45,8 @@ func (s *Server) SetupRouter(r *gin.Engine) {
 		middleware.SetPlatform("web"),
 	)
 	{
+		webOauthServer.GET("temp-token/refresh", refreshTempTokenHandler)
 		webOauthServer.GET("token", getTokenByTempToken)
-		webOauthServer.POST("temp-token/refresh", refreshTempTokenHandler)
 		webOauthServer.GET("bind/account", s.bindAccount)
 		webOauthServer.GET("bind/account/callback", s.bindAccountCallback)
 		webOauthServer.GET("userinfo", s.userInfoHandler)
