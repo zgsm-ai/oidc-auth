@@ -116,18 +116,15 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 		user.InviterID = &inviter.ID
 	}
 
+	// Get tokenHash and update tokenHash exipry for redirect
+	tokenHash := getTokenHashForWebRedirect(user)
+
 	// Update or create user
 	err = providerInstance.Update(ctx, user)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
 			fmt.Errorf("%s: %v", errs.ErrInfoUpdateUserInfo, err))
 		return
-	}
-
-	// Get user's access token hash as state parameter
-	var tokenHash string
-	if len(user.Devices) > 0 {
-		tokenHash = user.Devices[0].AccessTokenHash
 	}
 
 	// Redirect to bind account page with tokenHash as state parameter
@@ -177,6 +174,7 @@ func GetWebUserByOauth(ctx context.Context, code, provider string) (*repository.
 	}
 
 	// Create web device record with web-specific identifiers (following plugin field order)
+	tokenHashExpiry := utils.GenerateTokenHashExpiry()
 	user.Devices = append(user.Devices, repository.Device{
 		ID:               uuid.New(),
 		CreatedAt:        time.Now(),
@@ -195,6 +193,7 @@ func GetWebUserByOauth(ctx context.Context, code, provider string) (*repository.
 		AccessTokenHash:  accessTokenHash,
 		State:            "", // Will be set during callback if needed
 		DeviceCode:       "",
+		TokenHashExpiry:  tokenHashExpiry,
 	})
 
 	// Note: User's own invite code will be generated when they first access the invite-code endpoint
@@ -249,4 +248,29 @@ func (s *Server) getUserInviteCodeHandler(c *gin.Context) {
 	response.JSONSuccess(c, "", gin.H{
 		"invite_code": user.InviteCode,
 	})
+}
+
+// getTokenHashForWebRedirect updates web device temp token for redirect
+// Since GetWebUserByOauth always creates a web device, we just need to find and update it
+func getTokenHashForWebRedirect(user *repository.AuthUser) string {
+	// Generate new temp token and expiry
+	tokenHashExpiry := utils.GenerateTokenHashExpiry()
+
+	// Find web device and update temp token (GetWebUserByOauth always creates one)
+	for i, device := range user.Devices {
+		if device.Platform == "web" {
+			user.Devices[i].TokenHashExpiry = tokenHashExpiry
+			user.Devices[i].UpdatedAt = time.Now()
+			return user.Devices[i].AccessTokenHash
+		}
+	}
+
+	// Fallback: update first device if
+	if len(user.Devices) > 0 {
+		user.Devices[0].TokenHashExpiry = tokenHashExpiry
+		user.Devices[0].UpdatedAt = time.Now()
+		return user.Devices[0].AccessTokenHash
+	}
+
+	return ""
 }

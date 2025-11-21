@@ -45,21 +45,22 @@ type AuthUser struct {
 }
 
 type Device struct {
-	ID               uuid.UUID `json:"id"`
-	CreatedAt        time.Time `gorm:"type:timestamp" json:"created_at"`
-	UpdatedAt        time.Time `gorm:"type:timestamp" json:"updated_at"`
-	MachineCode      string    `json:"machine_code"`
-	VSCodeVersion    string    `json:"vscode_version"`
-	PluginVersion    string    `json:"plugin_version"`
-	State            string    `json:"state"`
-	RefreshTokenHash string    `json:"refresh_token_hash"`
-	RefreshToken     string    `json:"refresh_token"`
-	AccessToken      string    `json:"access_token"`
-	AccessTokenHash  string    `json:"access_token_hash"`
-	UriScheme        string    `json:"uri_scheme"`
-	Status           string    `json:"status"`
-	Provider         string    `json:"provider"`
-	Platform         string    `json:"platform"`
-	DeviceCode       string    `json:"device_code"`
-	TokenProvider    string    `gorm:"size:20" json:"token_provider"`
+	ID               uuid.UUID  `json:"id"`
+	CreatedAt        time.Time  `gorm:"type:timestamp" json:"created_at"`
+	UpdatedAt        time.Time  `gorm:"type:timestamp" json:"updated_at"`
+	MachineCode      string     `json:"machine_code"`
+	VSCodeVersion    string     `json:"vscode_version"`
+	PluginVersion    string     `json:"plugin_version"`
+	State            string     `json:"state"`
+	RefreshTokenHash string     `json:"refresh_token_hash"`
+	RefreshToken     string     `json:"refresh_token"`
+	AccessToken      string     `json:"access_token"`
+	AccessTokenHash  string     `json:"access_token_hash"`
+	UriScheme        string     `json:"uri_scheme"`
+	Status           string     `json:"status"`
+	Provider         string     `json:"provider"`
+	Platform         string     `json:"platform"`
+	DeviceCode       string     `json:"device_code"`
+	TokenProvider    string     `gorm:"size:20" json:"token_provider"`
+	TokenHashExpiry  *time.Time `json:"token_expiry"` // Expiration time of temporary token, nil indicates already used
 }

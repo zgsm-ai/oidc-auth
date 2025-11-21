@@ -198,6 +198,7 @@ func updateUserInfoMid(user *repository.AuthUser, index int, tokenPair *utils.To
 	user.Devices[index].RefreshTokenHash = refreshTokenHash
 }
 
+// getTokenByHash get acess token by token hash
 func getTokenByHash(c *gin.Context) {
 	accessTokenHash, err := getTokenFromHeader(c)
 	if err != nil {
@@ -213,6 +214,52 @@ func getTokenByHash(c *gin.Context) {
 			fmt.Sprintf("%s, %s", errs.ErrInfoQueryUserInfo, err.Error()))
 		return
 	}
+	response.JSONSuccess(c, "", gin.H{
+		"state":        c.DefaultQuery("state", ""),
+		"access_token": tokenPair.AccessToken,
+	})
+}
+
+// getTokenByHashV2 get acess token by token hash, verify hash is valid
+func getTokenByHashV2(c *gin.Context) {
+	accessTokenHash, err := getTokenFromHeader(c)
+	if err != nil {
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("token").Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// The new api needs to be verified。Verify hash is valid (not used and not expired) before getting token
+	user, deviceIndex, err := utils.GetUserByTokenHash(ctx, accessTokenHash, "access_token_hash")
+	if err != nil || user == nil || deviceIndex == -1 {
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrUserNotFound,
+			fmt.Sprintf("%s, %s", errs.ErrInfoQueryUserInfo, err.Error()))
+		return
+	}
+
+	// Check hash expiration time
+	device := user.Devices[deviceIndex]
+	if !utils.ValidateTokenHashExpiry(device.TokenHashExpiry) {
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrTokenInvalid,
+			"temp token has been used or expired")
+		return
+	}
+	tokenPair := &utils.TokenPair{
+		AccessToken:  device.AccessToken,
+		RefreshToken: device.RefreshToken,
+	}
+
+	// Mark hash as used (set expiration time to nil)
+	device.TokenHashExpiry = nil
+	user.Devices[deviceIndex] = device
+	if err := repository.GetDB().Upsert(ctx, user, constants.DBIndexField, user.ID); err != nil {
+		response.JSONError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
+			fmt.Sprintf("failed to mark hash as used: %s", err.Error()))
+		return
+	}
+
 	response.JSONSuccess(c, "", gin.H{
 		"state":        c.DefaultQuery("state", ""),
 		"access_token": tokenPair.AccessToken,
@@ -259,4 +306,42 @@ func GenerateTokenPairByCustom(ctx context.Context, user *repository.AuthUser, i
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
 	}, nil
+}
+
+// refreshTokenHashExpiryHandler refreshes tokenHash expiry
+// Receives access_token, validates it, and updates the device token hash expiry
+func refreshTokenHashExpiryHandler(c *gin.Context) {
+	token, err := getTokenFromHeader(c)
+	if err != nil {
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrBadRequestParam,
+			errs.ParamNeedErr("token").Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	user, deviceIndex, err := utils.GetUserByTokenHash(ctx, token, "access_token_hash")
+	if err != nil || user == nil || deviceIndex == -1 {
+		response.JSONError(c, http.StatusUnauthorized, errs.ErrUserNotFound,
+			fmt.Sprintf("Invalid token: %s", err.Error()))
+		return
+	}
+
+	device := user.Devices[deviceIndex]
+
+	newTokenHashExpiry := utils.GenerateTokenHashExpiry()
+	device.TokenHashExpiry = newTokenHashExpiry
+	user.Devices[deviceIndex] = device
+
+	if err := repository.GetDB().Upsert(ctx, user, constants.DBIndexField, user.ID); err != nil {
+		response.JSONError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
+			fmt.Sprintf("failed to update temp token: %s", err.Error()))
+		return
+	}
+
+	response.JSONSuccess(c, "", gin.H{
+		"state":      c.DefaultQuery("state", ""),
+		"token_hash": token,
+	})
 }
