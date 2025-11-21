@@ -201,6 +201,21 @@ func HashToken(token string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
+// GenerateTokenHashExpiry Generate hash expiration time
+func GenerateTokenHashExpiry() *time.Time {
+	expiry := time.Now().Add(60 * time.Second)
+	return &expiry
+}
+
+// ValidateTokenHashExpiry Validate whether temporary hash is expired or has been used
+// Returns true if valid, false if used or expired
+func ValidateTokenHashExpiry(expiry *time.Time) bool {
+	if expiry == nil {
+		return false // Already used (nil value indicates used)
+	}
+	return time.Now().Before(*expiry)
+}
+
 func GenerateRandomString(length int) (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, length)

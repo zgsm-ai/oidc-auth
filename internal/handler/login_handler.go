@@ -148,6 +148,7 @@ func (s *Server) callbackHandler(c *gin.Context) {
 			userAlreadyExist.Devices[index].AccessToken = ""
 			userAlreadyExist.Devices[index].RefreshTokenHash = ""
 			userAlreadyExist.Devices[index].RefreshToken = ""
+			userAlreadyExist.Devices[index].TokenHashExpiry = nil
 			userAlreadyExist.Devices[index].State = ""
 			userAlreadyExist.Devices[index].UpdatedAt = time.Now()
 			userAlreadyExist.UpdatedAt = time.Now()
@@ -218,20 +219,22 @@ func GetUserByOauth(ctx context.Context, typ, code string, parm *ParameterCarrie
 		if user.ID == uuid.Nil {
 			user.ID = uuid.New()
 		}
+		tokenHashExpiry := utils.GenerateTokenHashExpiry()
 		user.Devices = append(user.Devices, repository.Device{
-			ID:            uuid.New(),
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
-			MachineCode:   mac,
-			UriScheme:     uScheme,
-			VSCodeVersion: vsVersion,
-			PluginVersion: pVersion,
-			RefreshToken:  refreshToken,
-			AccessToken:   accessToken,
-			Provider:      provider,
-			Platform:      "plugin",
-			Status:        constants.LoginStatusLoggedOut,
-			TokenProvider: tokenProvider,
+			ID:              uuid.New(),
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
+			MachineCode:     mac,
+			UriScheme:       uScheme,
+			VSCodeVersion:   vsVersion,
+			PluginVersion:   pVersion,
+			RefreshToken:    refreshToken,
+			AccessToken:     accessToken,
+			Provider:        provider,
+			Platform:        "plugin",
+			Status:          constants.LoginStatusLoggedOut,
+			TokenProvider:   tokenProvider,
+			TokenHashExpiry: tokenHashExpiry,
 		})
 	}
 	return user, nil

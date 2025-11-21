@@ -241,14 +241,14 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 		}
 	}
 
+	// Use main account's token hash for redirect to ensure token validity
+	tokenHash := getTokenHashForRedirect(userMarge, mainToken)
+
 	if err := repository.GetDB().Upsert(ctx, userMarge, constants.DBIndexField, userMarge.ID); err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUpdateInfo,
 			fmt.Errorf("%s: %w", errs.ErrInfoUpdateUserInfo, err))
 		return
 	}
-
-	// Use main account's token hash for redirect to ensure token validity
-	tokenHash := getTokenHashForRedirect(userMarge, mainToken)
 
 	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
 	url = url + "&bind=true"
@@ -344,15 +344,19 @@ func determineMainAccount(userOld, userNew, userNewExist *repository.AuthUser, u
 // It searches for the device with the matching main token, falls back to first available token hash
 func getTokenHashForRedirect(userMarge *repository.AuthUser, mainToken string) string {
 	var tokenHash string
-	for _, device := range userMarge.Devices {
+	tokenHashExpiry := utils.GenerateTokenHashExpiry()
+
+	for i, device := range userMarge.Devices {
 		if device.AccessToken == mainToken {
 			tokenHash = device.AccessTokenHash
+			userMarge.Devices[i].TokenHashExpiry = tokenHashExpiry
 			break
 		}
 	}
 	// Fallback: use first available token hash if main token not found
 	if tokenHash == "" && len(userMarge.Devices) > 0 {
 		tokenHash = userMarge.Devices[0].AccessTokenHash
+		userMarge.Devices[0].TokenHashExpiry = tokenHashExpiry
 	}
 	return tokenHash
 }
