@@ -143,10 +143,11 @@ var serveCmd = &cobra.Command{
 		go func() {
 			log.Info(nil, "Starting server...")
 			server := handler.Server{
-				ServerPort: globalConfig.Server.ServerPort,
-				BaseURL:    globalConfig.Server.BaseURL,
-				HTTPClient: initHTTPClient(nil),
-				IsPrivate:  globalConfig.Server.IsPrivate,
+				ServerPort:  globalConfig.Server.ServerPort,
+				BaseURL:     globalConfig.Server.BaseURL,
+				HTTPClient:  initHTTPClient(nil),
+				IsPrivate:   globalConfig.Server.IsPrivate,
+				RedirectURL: globalConfig.Redirect.Uris,
 			}
 			if err := server.StartServer(); err != nil {
 				log.Error(nil, "Server error: %v", err)
