@@ -37,10 +37,13 @@ func (s *Server) webLoginHandler(c *gin.Context) {
 
 	// Use inviterCode as state parameter
 	state := inviterCode
-	authURL := providerInstance.GetAuthURL(state, s.BaseURL+constants.WebLoginCallbackURI)
+	var redirectURL = ""
 	if redirectService != "" {
-		authURL = fmt.Sprintf("%s/%s", authURL, redirectService)
+		redirectURL = fmt.Sprintf("%s/%s", s.BaseURL+constants.WebLoginCallbackURI, redirectService)
+	} else {
+		redirectURL = s.BaseURL + constants.WebLoginCallbackURI
 	}
+	authURL := providerInstance.GetAuthURL(state, redirectURL)
 	response.JSONSuccess(c, "", map[string]interface{}{
 		"state":        state,
 		"inviter_code": inviterCode,
