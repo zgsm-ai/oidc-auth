@@ -21,6 +21,7 @@ type AppConfig struct {
 	SMS          SMSConfig                 `json:"sms" mapstructure:"sms" validate:"required"`
 	Providers    map[string]ProviderConfig `json:"providers" mapstructure:"providers"`
 	QuotaManager QuotaConfig               `json:"quotaManager" mapstructure:"quotaManager"`
+	Redirect     RedirectConfig            `json:"redirect" mapstructure:"redirect"`
 }
 
 type Server struct {
@@ -28,6 +29,10 @@ type Server struct {
 	BaseURL    string            `json:"baseURL" mapstructure:"baseURL"`
 	HTTP       *HTTPClientConfig `json:"http" mapstructure:"http" validate:"required"`
 	IsPrivate  bool              `json:"isPrivate" mapstructure:"isPrivate"`
+}
+
+type RedirectConfig struct {
+	Uris map[string]string `json:"uris" mapstructure:"uris"`
 }
 
 type HTTPClientConfig struct {

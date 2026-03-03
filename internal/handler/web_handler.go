@@ -26,6 +26,7 @@ type WebParameterCarrier struct {
 func (s *Server) webLoginHandler(c *gin.Context) {
 	provider := c.DefaultQuery("provider", "casdoor")
 	inviterCode := c.DefaultQuery("inviter_code", "")
+	redirectService := c.DefaultQuery("redirect_service", "")
 
 	oauthManager := providers.GetManager()
 	providerInstance, err := oauthManager.GetProvider(provider)
@@ -36,8 +37,13 @@ func (s *Server) webLoginHandler(c *gin.Context) {
 
 	// Use inviterCode as state parameter
 	state := inviterCode
-	authURL := providerInstance.GetAuthURL(state, s.BaseURL+constants.WebLoginCallbackURI)
-
+	var redirectURL = ""
+	if redirectService != "" {
+		redirectURL = fmt.Sprintf("%s/%s", s.BaseURL+constants.WebLoginCallbackURI, redirectService)
+	} else {
+		redirectURL = s.BaseURL + constants.WebLoginCallbackURI
+	}
+	authURL := providerInstance.GetAuthURL(state, redirectURL)
 	response.JSONSuccess(c, "", map[string]interface{}{
 		"state":        state,
 		"inviter_code": inviterCode,
@@ -49,7 +55,8 @@ func (s *Server) webLoginHandler(c *gin.Context) {
 func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 	code := c.DefaultQuery("code", "")
 	state := c.DefaultQuery("state", "")
-	inviterCode := state // inviter code is in the state parameter
+	inviterCode := state          // inviter code is in the state parameter
+	service := c.Param("service") // service parameter for custom redirect
 
 	if code == "" {
 		response.JSONError(c, http.StatusBadRequest, errs.ErrBadRequestParam,
@@ -130,8 +137,22 @@ func (s *Server) webLoginCallbackHandler(c *gin.Context) {
 		tokenHash = user.Devices[0].AccessTokenHash
 	}
 
-	// Redirect to bind account page with tokenHash as state parameter
-	redirectURL := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
+	// Determine redirect URL based on service parameter
+	var redirectURL string
+	if service != "" {
+		// Check RedirectConfig for custom redirect URI
+		if s.RedirectURL != nil {
+			if uri, ok := s.RedirectURL[service]; ok && uri != "" {
+				redirectURL = fmt.Sprintf("%s%s?state=%s", providerInstance.GetEndpoint(false), uri, tokenHash)
+			}
+		}
+	}
+
+	// If no custom redirect configured, use default
+	if redirectURL == "" {
+		redirectURL = providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
+	}
+
 	c.Redirect(http.StatusFound, redirectURL)
 }
 

@@ -1,18 +1,20 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/zgsm-ai/oidc-auth/internal/middleware"
 	"github.com/zgsm-ai/oidc-auth/pkg/log"
 )
 
 type Server struct {
-	ServerPort string
-	BaseURL    string
-	HTTPClient *http.Client
-	IsPrivate  bool
+	ServerPort  string
+	BaseURL     string
+	HTTPClient  *http.Client
+	IsPrivate   bool
+	RedirectURL map[string]string
 }
 
 type ParameterCarrier struct {
@@ -48,8 +50,9 @@ func (s *Server) SetupRouter(r *gin.Engine) {
 		webOauthServer.GET("bind/account", s.bindAccount)
 		webOauthServer.GET("bind/account/callback", s.bindAccountCallback)
 		webOauthServer.GET("userinfo", s.userInfoHandler)
-		webOauthServer.GET("login", s.webLoginHandler)
+		webOauthServer.GET("login", s.webLoginHandler) // web login entry point and redirect to custom service
 		webOauthServer.GET("login/callback", s.webLoginCallbackHandler)
+		webOauthServer.GET("login/callback/:service", s.webLoginCallbackHandler) // with service param, custom redirect
 		webOauthServer.GET("invite-code", s.getUserInviteCodeHandler)
 	}
 	r.POST("/oidc-auth/api/v1/send/sms", s.SMSHandler)
