@@ -16,14 +16,13 @@ import (
 	"github.com/zgsm-ai/oidc-auth/internal/providers"
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
 	"github.com/zgsm-ai/oidc-auth/internal/service"
-	github "github.com/zgsm-ai/oidc-auth/internal/sync"
+	"github.com/zgsm-ai/oidc-auth/internal/usercenter"
 	"github.com/zgsm-ai/oidc-auth/pkg/response"
 	"github.com/zgsm-ai/oidc-auth/pkg/utils"
 )
 
 const (
 	defaultTimeout = 45 * time.Second
-	shortTimeout   = 10 * time.Second
 )
 
 func getContextWithTimeout(timeout time.Duration) (context.Context, context.CancelFunc) {
@@ -132,7 +131,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	defer cancel()
 
 	parameterCarrier.Provider = "casdoor"
-	userNew, err := GetUserByOauth(ctx, "plugin", code, &parameterCarrier)
+	userNew, _, err := GetUserByOauth(ctx, "plugin", code, &parameterCarrier)
 	if err != nil {
 		response.HandleError(c, http.StatusInternalServerError, errs.ErrUserNotFound, err)
 		return
@@ -250,7 +249,7 @@ func (s *Server) bindAccountCallback(c *gin.Context) {
 	// Use main account's token hash for redirect to ensure token validity
 	tokenHash := getTokenHashForRedirect(userMarge, mainToken)
 
-	url := providerInstance.GetEndpoint(false) + constants.BindAccountBindURI + "?state=" + tokenHash
+	url := s.webRedirectBase(providerInstance) + constants.BindAccountBindURI + "?state=" + tokenHash
 	url = url + "&bind=true"
 	c.Redirect(http.StatusFound, url)
 }
@@ -262,24 +261,14 @@ func (s *Server) userInfoHandler(c *gin.Context) {
 		return
 	}
 
-	tokenHash := utils.HashToken(token)
-	ctx, cancel := getContextWithTimeout(shortTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	user, err := repository.GetDB().GetUserByDeviceConditions(ctx, map[string]any{
-		"access_token_hash": tokenHash,
-	})
-	if err != nil || user == nil {
-		response.HandleError(c, http.StatusBadRequest, errs.ErrTokenInvalid, errs.ErrInfoInvalidToken)
+	user, err := fetchUserInfoFromCsUser(ctx, token)
+	if err != nil {
+		status, codeMsg := mapUserCenterError(err)
+		response.HandleError(c, status, codeMsg, err)
 		return
-	}
-
-	isStar := true
-	starProject := user.GithubStar
-
-	project := fmt.Sprintf("%s.%s", github.Owner, github.Repo)
-	if starProject == "" || starProject != project {
-		isStar = false
 	}
 
 	data := gin.H{
@@ -291,10 +280,84 @@ func (s *Server) userInfoHandler(c *gin.Context) {
 		"githubID":   user.GithubID,
 		"githubName": user.GithubName,
 		"isPrivate":  s.IsPrivate,
-		"isStar":     isStar,
 	}
 
 	response.JSONSuccess(c, "", data)
+}
+
+// fetchUserInfoFromCsUser verifies the caller's access token against cs-user
+// and assembles the identity fields purely from cs-user state (the local DB is
+// not authoritative for userinfo). verify and get-or-create are hard
+// gates — an invalid token or an explicitly unbound identity fails the request.
+// get-profile and auth-identities are soft reads: on failure the login-time
+// claims are served with a warning, never an error to the client.
+func fetchUserInfoFromCsUser(ctx context.Context, token string) (*repository.AuthUser, error) {
+	client := usercenter.GetClient()
+	if client == nil {
+		return nil, fmt.Errorf("usercenter client not initialized")
+	}
+	result, err := client.Verify(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	universalID, err := uuid.Parse(result.UniversalID)
+	if err != nil || universalID == uuid.Nil {
+		return nil, fmt.Errorf("%w: invalid universal_id %q", usercenter.ErrInvalidIdentity, result.UniversalID)
+	}
+	csUser, _, err := client.GetOrCreate(ctx, &usercenter.Claims{
+		Sub:         result.Subject,
+		UniversalID: result.UniversalID,
+		Name:        result.Name,
+		Email:       result.Email,
+		Phone:       result.Phone,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	user := &repository.AuthUser{
+		ID:        universalID,
+		Name:      result.Name,
+		Phone:     normalizePhone(result.Phone),
+		Email:     result.Email,
+		SubjectID: csUser.SubjectID,
+	}
+	if csUser.SubjectID == "" {
+		return user, nil
+	}
+
+	up, err := client.GetProfile(ctx, csUser.SubjectID)
+	if err != nil {
+		log.Warn(nil, "userinfo get-profile failed for user %s, serving login-time claims: %v", universalID, err)
+	} else {
+		if up.Username != "" {
+			user.Name = up.Username
+		} else if up.DisplayName != nil && *up.DisplayName != "" {
+			user.Name = *up.DisplayName
+		}
+		if up.Email != nil && *up.Email != "" {
+			user.Email = *up.Email
+		}
+		if up.Phone != nil && *up.Phone != "" {
+			user.Phone = normalizePhone(*up.Phone)
+		}
+	}
+
+	identities, err := client.ListIdentities(ctx, csUser.SubjectID)
+	if err != nil {
+		log.Warn(nil, "userinfo list-identities failed for user %s: %v", universalID, err)
+	} else {
+		for _, identity := range identities {
+			if identity.Provider == "github" {
+				user.GithubID = identity.ProviderUserID
+				if identity.DisplayName != nil {
+					user.GithubName = *identity.DisplayName
+				}
+				break
+			}
+		}
+	}
+	return user, nil
 }
 
 func coalesceString(values ...string) string {

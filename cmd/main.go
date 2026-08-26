@@ -18,6 +18,7 @@ import (
 	"github.com/zgsm-ai/oidc-auth/internal/repository"
 	"github.com/zgsm-ai/oidc-auth/internal/service"
 	github "github.com/zgsm-ai/oidc-auth/internal/sync"
+	"github.com/zgsm-ai/oidc-auth/internal/usercenter"
 	"github.com/zgsm-ai/oidc-auth/pkg/log"
 	"github.com/zgsm-ai/oidc-auth/pkg/utils"
 )
@@ -66,6 +67,13 @@ func initializeAllConfigurations(cfgFile string) (*config.AppConfig, error) {
 	}
 
 	utils.SetGlobalConfig(cfg)
+
+	// RSA key loading is unconditional and lazy (sync.Once); fail fast at
+	// startup so a missing or broken encrypt.privateKey surfaces now rather
+	// than at the first token sign/verify call.
+	if _, err := utils.GetEncryptKeyManager(); err != nil {
+		return nil, fmt.Errorf("failed to load encryption keys: %w", err)
+	}
 
 	if err := initLogger(&cfg.Log); err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
@@ -130,6 +138,12 @@ var serveCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err, "Failed to initialize providers")
 		}
+
+		// Initialize cs-user client (fail-closed: without it the login chain
+		// cannot establish the identity trust boundary).
+		if err := usercenter.InitClient(globalConfig.UserCenter.BaseURL, globalConfig.UserCenter.InternalToken, httpClient, globalConfig.UserCenter.Timeout); err != nil {
+			log.Fatal(err, "Failed to initialize usercenter client")
+		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -145,6 +159,7 @@ var serveCmd = &cobra.Command{
 			server := handler.Server{
 				ServerPort:  globalConfig.Server.ServerPort,
 				BaseURL:     globalConfig.Server.BaseURL,
+				WebBaseURL:  globalConfig.Server.WebBaseURL,
 				HTTPClient:  initHTTPClient(nil),
 				IsPrivate:   globalConfig.Server.IsPrivate,
 				RedirectURL: globalConfig.Redirect.Uris,

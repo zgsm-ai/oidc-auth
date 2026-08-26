@@ -6,6 +6,10 @@ server:
   # Base URL for the application, used for generating callbacks and redirects
   baseURL: ""
 
+  # Web frontend origin for post-login browser redirects (credit-manager).
+  # When empty, falls back to the OAuth provider's public endpoint.
+  webBaseURL: ""
+
   # Intranet/Extranet access
   isPrivate: "false"
 
@@ -119,19 +123,32 @@ encrypt:
   # AES encryption key (must be exactly 32 characters/bytes)
   aesKey: "pUD8mylndVVK7hTNt56VZMkNrppinbNg"  # need 32 bit
 
-  # Enable RSA encryption. "true" = enabled, "false" = disabled
-  enableRsa: "false"
-
-  # Path to RSA private key file for decryption
+  # RSA private key for token signing. Generate one with:
+  #   openssl genrsa -out private.pem 2048
+  # (the public key is derived from the private key automatically; keep the
+  #  private key secret — never commit it.)
+  # The value accepts three forms:
+  #   - a path to a PEM file            (e.g. "config/private.pem")
+  #   - inline PEM content (block scalar |)
+  #   - base64-encoded PEM
   privateKey: "config/private.pem"
-
-  # Path to RSA public key file for encryption
-  publicKey: "config/public.pem"
 
 # QuotaManager service configuration
 quotaManager:
   # QuotaManager service base URL
   baseURL: ""
+
+# cs-user service configuration (identity authority: verify /
+# get-or-create / auth-identities, guarded by X-Internal-Token)
+userCenter:
+  # cs-user internal API base URL (local dev: cs-user runs on :8082)
+  baseURL: "http://localhost:8082"
+
+  # Shared secret for X-Internal-Token header (matches cs-user CS_USER_INTERNAL_TOKEN)
+  internalToken: "password"
+
+  # Timeout for a single RPC call (login callback caps the 3-call chain at 15s)
+  timeout: "5s"
 
 # Logging configuration
 log:
